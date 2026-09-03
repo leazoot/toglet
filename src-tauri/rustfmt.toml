@@ -1,0 +1,6 @@
+# Only stable options are used so `cargo fmt` behaves identically on the pinned toolchain
+# across Windows and macOS. Unix newlines are enforced explicitly: without it rustfmt keeps
+# the platform default and the two development machines would rewrite each other's files.
+edition = "2024"
+max_width = 100
+newline_style = "Unix"

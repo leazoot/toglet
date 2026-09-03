@@ -1,0 +1,79 @@
+[package]
+name = "toglet"
+version = "0.1.0"
+description = "Codex account quota display and manual account switching"
+edition = "2024"
+rust-version = "1.85.0"
+license = "MIT"
+publish = false
+# The crate carries a second binary behind the `dev-harness` feature. Cargo lists it as available
+# whether or not the feature is on, so a bare `cargo run` - which is what `tauri dev` issues -
+# cannot decide between them and fails. Naming the default fixes `pnpm dev`.
+default-run = "toglet"
+
+[lib]
+# Tauri builds the app logic as a library so the same crate can back the desktop binary
+# and, later, integration tests that drive modules without spawning a window.
+name = "toglet_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon"] }
+thiserror = "2"
+# JSON-RPC frames over stdio. Both are already in the graph through Tauri, and serde's default
+# of ignoring unknown fields is what gives the wire layer forward compatibility for free.
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# Irreversible account fingerprints. Already in the graph through Tauri, so this
+# adds no code to the build; hand-rolling SHA-256 in a credential-handling binary would be worse
+# than depending on a reviewed implementation.
+sha2 = "0.10"
+
+[target.'cfg(windows)'.dependencies]
+# Raw Win32 bindings. Needed because the standard library cannot express a Windows DACL, and
+# a temporary directory holding decrypted credentials must be readable by the current user
+# only. Already present in the dependency graph through
+# Tauri, so this adds no new code to the build.
+windows-sys = { version = "0.61", features = [
+  "Wdk_System_SystemServices",
+  "Win32_Foundation",
+  "Win32_Security",
+  "Win32_Security_Authorization",
+  "Win32_Security_Cryptography",
+  "Win32_Storage_FileSystem",
+  # Process enumeration for the client probe. Toolhelp plus
+  # `QueryFullProcessImageNameW` gives process id, parent id and executable path without
+  # elevation, which is everything the probe is allowed to know.
+  "Win32_System_Diagnostics_ToolHelp",
+  "Win32_System_SystemInformation",
+  "Win32_System_Threading",
+  # Asking a window to close. `WM_CLOSE` is the request a well-behaved application
+  # answers by shutting itself down; there is no force-kill on this path.
+  "Win32_UI_WindowsAndMessaging",
+  # Opening the sign-in address in the user's browser. The app server returns the
+  # URL and leaves opening it to the client, so a sign-in is impossible without this.
+  # `ShellExecuteW` takes the address as one argument and resolves the registered protocol
+  # handler - there is no shell and no command line to build.
+  "Win32_UI_Shell",
+] }
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true
+
+[features]
+# Compiles the development-only verification entry point. Never enabled for a release build or
+# for the Tauri bundle, so `dev_harness` is not merely excluded from the installer - it is not
+# built at all.
+dev-harness = []
+
+[[bin]]
+name = "dev_harness"
+path = "src/bin/dev_harness.rs"
+required-features = ["dev-harness"]

@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Everything the interface is allowed to reach beyond Toglet's own commands. Deliberately not `core:default`: the bar has no need for the window, webview, path or app APIs, and granting them would hand the frontend capabilities it must never have. Only the two event calls are listed, and they exist because the tray can only ask the interface to act - it holds no quota and no settings sheet of its own.",
+  "windows": ["main"],
+  "permissions": ["core:event:allow-listen", "core:event:allow-unlisten"]
+}
