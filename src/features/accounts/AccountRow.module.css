@@ -1,0 +1,225 @@
+/* An account row: 348 × 90, including the active account's treatment. */
+
+.row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--tg-row-gap);
+  height: var(--tg-row-height);
+  padding: var(--tg-row-padding);
+  list-style: none;
+  transition:
+    background var(--tg-duration-row-hover) var(--tg-ease-standard),
+    transform var(--tg-duration-row-arrow) var(--tg-ease-standard);
+}
+
+.divided {
+  border-bottom: var(--tg-panel-hairline) solid var(--tg-line-row-divider);
+}
+
+/* Toward the screen's interior, which is the direction the pointer came from, so
+   it follows the docked edge rather than always being leftward. */
+.selectable:hover {
+  background: var(--tg-surface-row-hover);
+  transform: translateX(calc(var(--tg-inward-sign) * var(--tg-row-hover-shift)));
+}
+
+/* A switch in progress. Lifted to the hover surface rather than dimmed: this is the row the whole
+   panel is currently about, so it is the last thing that should recede. */
+.switching {
+  background: var(--tg-surface-row-hover);
+}
+
+/* Reaches assistive technology, takes no space and shows nothing. */
+.hidden {
+  position: absolute;
+  width: var(--tg-panel-hairline);
+  height: var(--tg-panel-hairline);
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.active {
+  background: var(--tg-active-row-bg);
+}
+
+.rail {
+  position: absolute;
+  left: 0;
+  top: var(--tg-active-rail-inset);
+  bottom: var(--tg-active-rail-inset);
+  width: var(--tg-active-rail-width);
+  border-radius: 0 var(--tg-active-rail-width) var(--tg-active-rail-width) 0;
+  background: transparent;
+  transition: background var(--tg-duration-active-move) var(--tg-ease-in-out);
+}
+
+.active .rail {
+  background: var(--tg-brand);
+}
+
+.avatar {
+  position: relative;
+  width: var(--tg-row-avatar-size);
+  height: var(--tg-row-avatar-size);
+  flex: none;
+  border-radius: 50%;
+  background: var(--tg-surface-avatar-well);
+  box-shadow: inset 0 0 0 var(--tg-panel-hairline) var(--tg-row-accent-ring, var(--tg-line-outline));
+  display: grid;
+  place-items: center;
+}
+
+/* The active account's ring is thicker and brand-coloured. */
+.active .avatar {
+  box-shadow: inset 0 0 0 var(--tg-active-avatar-ring) var(--tg-brand);
+}
+
+.initial {
+  font-size: var(--tg-text-row-initial-size);
+  font-weight: var(--tg-text-tag-weight);
+  color: var(--tg-row-accent, var(--tg-text-secondary));
+}
+
+.avatar[data-accent="1"] {
+  --tg-row-accent: var(--tg-accent-1);
+  --tg-row-accent-ring: var(--tg-accent-1-ring);
+}
+
+.avatar[data-accent="2"] {
+  --tg-row-accent: var(--tg-accent-2);
+  --tg-row-accent-ring: var(--tg-accent-2-ring);
+}
+
+.avatar[data-accent="3"] {
+  --tg-row-accent: var(--tg-accent-3);
+  --tg-row-accent-ring: var(--tg-accent-3-ring);
+}
+
+.avatar[data-accent="4"] {
+  --tg-row-accent: var(--tg-accent-4);
+  --tg-row-accent-ring: var(--tg-accent-4-ring);
+}
+
+.avatar[data-accent="5"] {
+  --tg-row-accent: var(--tg-accent-5);
+  --tg-row-accent-ring: var(--tg-accent-5-ring);
+}
+
+.badge {
+  position: absolute;
+  right: calc(-1 * var(--tg-bar-badge-outline));
+  top: calc(-1 * var(--tg-bar-badge-outline));
+  width: var(--tg-bar-badge-size);
+  height: var(--tg-bar-badge-size);
+  border-radius: 50%;
+  background: var(--tg-quota-warn);
+  box-shadow: 0 0 0 var(--tg-bar-badge-outline) var(--tg-surface-base);
+}
+
+.body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.heading {
+  display: flex;
+  align-items: center;
+  gap: var(--tg-row-inner-gap);
+  height: 18px;
+}
+
+.name {
+  font-size: var(--tg-text-account-size);
+  font-weight: var(--tg-text-account-weight);
+  letter-spacing: var(--tg-text-account-tracking);
+  color: var(--tg-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.plan,
+.chip {
+  flex: none;
+  font-size: var(--tg-text-tag-size);
+  font-weight: var(--tg-text-tag-weight);
+  letter-spacing: var(--tg-text-tag-tracking);
+  border-radius: var(--tg-plan-tag-radius);
+  padding: 2px var(--tg-row-inner-gap);
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+.plan {
+  color: var(--tg-text-label);
+  background: var(--tg-surface-avatar-well);
+}
+
+/* "Active" as a word, not only as a colour - colour is never the sole carrier. */
+.chip {
+  letter-spacing: var(--tg-text-chip-tracking);
+  color: var(--tg-active-tag-text);
+  background: var(--tg-active-tag-bg);
+}
+
+.email {
+  margin-top: 2px;
+  height: 15px;
+  font-size: var(--tg-text-email-size);
+  font-weight: var(--tg-text-body-weight);
+  color: var(--tg-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.quota {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: var(--tg-row-inner-gap);
+}
+
+.notice {
+  margin-top: 7px;
+  font-size: var(--tg-text-email-size);
+  font-weight: var(--tg-text-body-weight);
+  color: var(--tg-quota-warn);
+}
+
+/* Fixed width whether or not the arrow is drawn, so hover cannot reflow the row. */
+.arrow {
+  flex: none;
+  width: var(--tg-row-arrow-column);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  color: var(--tg-text-primary);
+}
+
+/* Waits outward of its column and rides in - the mirror of where the row is going. */
+.chevron {
+  width: 15px;
+  height: 15px;
+  opacity: 0;
+  transform: translateX(calc(-1 * var(--tg-inward-sign) * var(--tg-row-arrow-shift)));
+  transition:
+    opacity var(--tg-duration-row-hover) var(--tg-ease-out),
+    transform var(--tg-duration-row-arrow) var(--tg-ease-standard);
+}
+
+.selectable {
+  cursor: pointer;
+}
+
+.selectable:hover .chevron,
+.selectable:focus-visible .chevron {
+  opacity: 1;
+  transform: none;
+}

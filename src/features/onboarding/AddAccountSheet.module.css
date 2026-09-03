@@ -1,0 +1,106 @@
+/* Adding an account. In flow inside the panel, like the settings sheet. */
+
+.sheet {
+  margin: var(--tg-overlay-padding);
+  padding: var(--tg-overlay-padding);
+  border-radius: var(--tg-overlay-radius);
+  background: var(--tg-surface-overlay);
+  box-shadow: inset 0 0 0 var(--tg-panel-hairline) var(--tg-line-divider);
+}
+
+.heading {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  font-size: var(--tg-text-heading-size);
+  font-weight: var(--tg-text-account-weight);
+  letter-spacing: var(--tg-text-heading-tracking);
+  color: var(--tg-text-primary);
+}
+
+.body {
+  margin: 5px 0 0;
+  font-size: var(--tg-text-email-size);
+  font-weight: var(--tg-text-body-weight);
+  line-height: 1.5;
+  color: var(--tg-text-label);
+}
+
+/* The one thing the user has to know before the browser opens. */
+.warning {
+  margin: 10px 0 0;
+  padding: 8px 9px;
+  border-radius: var(--tg-button-radius);
+  background: var(--tg-surface-base);
+  box-shadow: inset 0 0 0 var(--tg-panel-hairline) var(--tg-line-outline);
+  font-size: var(--tg-text-email-size);
+  font-weight: var(--tg-text-body-weight);
+  line-height: 1.5;
+  color: var(--tg-text-secondary);
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 50%;
+}
+
+.ok {
+  background: var(--tg-quota-healthy);
+}
+
+.warn {
+  background: var(--tg-quota-warn);
+}
+
+.bad {
+  background: var(--tg-quota-low);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+  margin-top: 13px;
+}
+
+.primary,
+.secondary {
+  height: var(--tg-button-height);
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--tg-button-radius);
+  font-size: var(--tg-text-button-size);
+  cursor: pointer;
+  transition:
+    background var(--tg-duration-icon) var(--tg-ease-out),
+    opacity var(--tg-duration-icon) var(--tg-ease-out);
+}
+
+.primary {
+  font-weight: var(--tg-text-tag-weight);
+  background: var(--tg-button-primary-bg);
+  color: var(--tg-button-primary-text);
+}
+
+.primary:hover:not(:disabled) {
+  opacity: 0.86;
+}
+
+.primary:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.secondary {
+  font-weight: 500;
+  background: var(--tg-surface-button);
+  color: var(--tg-button-secondary-text);
+}
+
+.secondary:hover {
+  background: var(--tg-surface-button-hover);
+}

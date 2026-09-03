@@ -1,0 +1,100 @@
+/* The 4px quota bar in an account row. */
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--tg-quota-gap);
+}
+
+.label {
+  width: var(--tg-quota-label-width);
+  flex: none;
+  white-space: nowrap;
+  font-size: var(--tg-text-ring-label-size);
+  font-weight: var(--tg-text-ring-label-weight);
+  letter-spacing: var(--tg-text-quota-label-tracking);
+  color: var(--tg-text-secondary);
+}
+
+/* Flexible so the bar keeps the ≈117-123px the design's acceptance list asks for while the
+   fixed columns around it never move. */
+.track,
+.trackUnread {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  height: var(--tg-quota-bar-height);
+  border-radius: var(--tg-quota-bar-radius);
+  background: var(--tg-line-track);
+  overflow: hidden;
+}
+
+/* A reading that does not exist. Dashes, so an empty bar cannot read as an exhausted one. */
+.trackUnread {
+  background: repeating-linear-gradient(
+    90deg,
+    var(--tg-quota-unreadable) 0,
+    var(--tg-quota-unreadable) 1.8px,
+    transparent 1.8px,
+    transparent 5.4px
+  );
+}
+
+.fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  border-radius: var(--tg-quota-bar-radius);
+  /* One move to the new value, no loop. */
+  transition:
+    width var(--tg-duration-quota) var(--tg-ease-standard),
+    background var(--tg-duration-quota) var(--tg-ease-standard);
+}
+
+/* Non-active rows dim their fills so the active one reads at a glance. */
+.dimmed {
+  opacity: var(--tg-inactive-fill-opacity);
+}
+
+.healthy {
+  background: var(--tg-quota-healthy);
+}
+
+.warn {
+  background: var(--tg-quota-warn);
+}
+
+.low {
+  background: var(--tg-quota-low);
+}
+
+.empty {
+  background: var(--tg-quota-empty);
+}
+
+.unreadable {
+  background: transparent;
+}
+
+.percent {
+  width: var(--tg-quota-percent-width);
+  flex: none;
+  white-space: nowrap;
+  text-align: right;
+  font-size: var(--tg-text-percent-size);
+  font-weight: var(--tg-text-percent-weight);
+  letter-spacing: var(--tg-text-percent-tracking);
+  color: var(--tg-text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.reset {
+  width: var(--tg-quota-reset-width);
+  flex: none;
+  white-space: nowrap;
+  font-size: var(--tg-text-reset-size);
+  font-weight: var(--tg-text-body-weight);
+  color: var(--tg-text-secondary);
+  font-variant-numeric: tabular-nums;
+}

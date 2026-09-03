@@ -1,0 +1,294 @@
+/* The settings sheet: 340 wide, r13, rows 38, segmented r7 / selected r5. */
+
+/* In flow, so the panel grows to hold it and the window is sized for what is actually there. */
+.scrim {
+  padding: var(--tg-overlay-padding);
+}
+
+@keyframes tg-settings-rise {
+  from {
+    opacity: 0;
+    transform: translateY(var(--tg-overlay-enter-shift));
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Padding belongs to the header and the body, not to the sheet: the design's divider under the
+   header runs the full width, which it cannot do inside a padded box. */
+.sheet {
+  width: 100%;
+  border-radius: var(--tg-settings-radius);
+  background: var(--tg-surface-overlay);
+  overflow: hidden;
+  box-shadow:
+    inset 0 0 0 var(--tg-panel-hairline) var(--tg-line-inset),
+    var(--tg-shadow-settings);
+  animation: tg-settings-rise var(--tg-duration-overlay) var(--tg-ease-standard);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sheet {
+    animation: none;
+  }
+}
+
+:root[data-motion="reduced"] .sheet {
+  animation: none;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: var(--tg-quota-gap);
+  padding: var(--tg-settings-header-padding);
+  border-bottom: var(--tg-panel-hairline) solid var(--tg-line-divider);
+}
+
+.headerIcon {
+  width: 15px;
+  height: 15px;
+  flex: none;
+  color: var(--tg-text-label);
+}
+
+.title {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--tg-text-sheet-title-size);
+  font-weight: var(--tg-text-account-weight);
+  letter-spacing: var(--tg-text-heading-tracking);
+  color: var(--tg-text-primary);
+}
+
+.close {
+  height: var(--tg-button-height);
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--tg-button-radius);
+  background: var(--tg-surface-button);
+  color: var(--tg-button-secondary-text);
+  font-size: var(--tg-text-button-size);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background var(--tg-duration-icon) var(--tg-ease-out);
+}
+
+.close:hover {
+  background: var(--tg-surface-button-hover);
+}
+
+.rows {
+  display: flex;
+  flex-direction: column;
+  padding: var(--tg-settings-body-padding);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--tg-row-gap);
+  min-height: var(--tg-settings-row-height);
+}
+
+.label {
+  font-size: var(--tg-text-setting-label-size);
+  font-weight: var(--tg-text-body-weight);
+  color: var(--tg-text-primary);
+}
+
+.message {
+  margin: var(--tg-quota-gap) 0 0;
+  font-size: var(--tg-text-email-size);
+  font-weight: var(--tg-text-body-weight);
+  color: var(--tg-text-secondary);
+}
+
+/* A well with the chosen item raised out of it. */
+.segmented {
+  display: flex;
+  padding: var(--tg-switch-inset);
+  flex: none;
+  border-radius: var(--tg-segmented-radius);
+  background: var(--tg-surface-segment-well);
+  box-shadow: inset 0 0 0 var(--tg-panel-hairline) var(--tg-line-inset);
+}
+
+.segment {
+  height: var(--tg-segmented-height);
+  padding: var(--tg-segmented-item-padding);
+  border: 0;
+  border-radius: var(--tg-segmented-item-radius);
+  background: transparent;
+  color: var(--tg-text-secondary);
+  font-size: var(--tg-text-button-size);
+  font-weight: var(--tg-text-body-weight);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition:
+    background var(--tg-duration-icon) var(--tg-ease-out),
+    color var(--tg-duration-icon) var(--tg-ease-out);
+}
+
+/* Three items have to share the same row width as two, so they each give up a pixel of air. */
+.tight .segment {
+  padding: var(--tg-segmented-item-padding-tight);
+}
+
+.picked {
+  background: var(--tg-surface-segment-picked);
+  box-shadow: var(--tg-shadow-segment-picked);
+  color: var(--tg-text-primary);
+  font-weight: var(--tg-text-tag-weight);
+}
+
+.segment:disabled {
+  cursor: default;
+}
+
+/* A switch, and the knob's position is the state - never colour alone (accessibility). */
+.switch {
+  position: relative;
+  width: var(--tg-switch-width);
+  height: var(--tg-switch-height);
+  flex: none;
+  padding: 0;
+  border: 0;
+  border-radius: calc(var(--tg-switch-height) / 2);
+  background: var(--tg-switch-off-bg);
+  cursor: pointer;
+  transition: background var(--tg-duration-icon) var(--tg-ease-out);
+}
+
+.on {
+  background: var(--tg-brand);
+}
+
+.switch:disabled {
+  cursor: default;
+}
+
+.knob {
+  position: absolute;
+  top: var(--tg-switch-inset);
+  left: var(--tg-switch-inset);
+  width: var(--tg-switch-knob-size);
+  height: var(--tg-switch-knob-size);
+  border-radius: 50%;
+  background: var(--tg-switch-knob-off);
+  transition:
+    transform var(--tg-duration-icon) var(--tg-ease-standard),
+    background var(--tg-duration-icon) var(--tg-ease-out);
+}
+
+.on .knob {
+  background: var(--tg-switch-knob-on);
+  transform: translateX(
+    calc(var(--tg-switch-width) - var(--tg-switch-knob-size) - 2 * var(--tg-switch-inset))
+  );
+}
+
+/* The account list under the settings. Divided from the rows above like the header. */
+.accounts {
+  padding: var(--tg-settings-body-padding);
+  border-top: var(--tg-panel-hairline) solid var(--tg-line-divider);
+}
+
+.sectionTitle {
+  margin: 0;
+  font-size: var(--tg-text-email-size);
+  font-weight: var(--tg-text-tag-weight);
+  color: var(--tg-text-secondary);
+}
+
+/* Five rows, then it scrolls - the same allowance the panel's own list has. */
+.accountList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  /* Five account rows: a settings row plus the padding an account row adds. */
+  max-height: calc(
+    5 * (var(--tg-settings-row-height) + 2 * var(--tg-settings-account-row-padding))
+  );
+  overflow-y: auto;
+}
+
+/* Two lines of text beside a control: taller than a settings row, and the text gives way. */
+.accountRow {
+  display: flex;
+  align-items: center;
+  gap: var(--tg-row-gap);
+  min-height: var(--tg-settings-row-height);
+  padding: var(--tg-settings-account-row-padding) 0;
+}
+
+.accountName {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  font-size: var(--tg-text-setting-label-size);
+  font-weight: var(--tg-text-body-weight);
+  color: var(--tg-text-primary);
+}
+
+.nameLine {
+  display: flex;
+  align-items: center;
+  gap: var(--tg-quota-gap);
+  min-width: 0;
+}
+
+.nameText,
+.accountEmail {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.accountEmail {
+  font-size: var(--tg-text-email-size);
+  color: var(--tg-text-secondary);
+}
+
+.inUseMark {
+  flex: none;
+  width: var(--tg-settings-mark-size);
+  height: var(--tg-settings-mark-size);
+  color: var(--tg-quota-warn);
+}
+
+.inUse {
+  flex: none;
+  font-size: var(--tg-text-email-size);
+  font-weight: var(--tg-text-body-weight);
+  color: var(--tg-text-secondary);
+  text-align: right;
+}
+
+.confirm {
+  display: flex;
+  flex: none;
+  gap: var(--tg-row-gap);
+}
+
+.remove {
+  composes: close;
+  flex: none;
+}
+
+.cancel,
+.dismiss {
+  composes: close;
+  flex: none;
+  background: transparent;
+}
+
+.dismiss {
+  height: auto;
+  padding: 0;
+}

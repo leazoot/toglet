@@ -1,0 +1,234 @@
+/* The expanded panel. 348 wide, corners r14, one hairline, nothing overflowing. */
+
+.panel {
+  width: var(--tg-panel-width);
+  flex: none;
+  background: var(--tg-surface-base);
+  border: var(--tg-panel-hairline) solid var(--tg-line-outline);
+  border-radius: var(--tg-panel-radius);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.toolbar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--tg-panel-gap);
+  padding: var(--tg-toolbar-padding);
+  border-bottom: var(--tg-panel-hairline) solid var(--tg-line-divider);
+}
+
+.brand {
+  width: var(--tg-brand-mark-size);
+  height: var(--tg-brand-mark-size);
+  flex: none;
+}
+
+/* Title and count share a baseline: two sizes on one line read as one label only if they sit on
+   the same line, not if they are centred against each other. */
+.heading {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+}
+
+.title {
+  font-size: var(--tg-text-product-size);
+  font-weight: var(--tg-text-product-weight);
+  letter-spacing: var(--tg-text-product-tracking);
+  color: var(--tg-text-primary);
+}
+
+.count {
+  min-width: 0;
+  font-size: var(--tg-text-count-size);
+  color: var(--tg-text-count);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The three buttons are one cluster, spaced tighter than the toolbar's own rhythm. */
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.iconButton {
+  width: var(--tg-icon-button-size);
+  height: var(--tg-icon-button-size);
+  flex: none;
+  display: grid;
+  place-items: center;
+  border: 0;
+  padding: 0;
+  border-radius: var(--tg-icon-button-radius);
+  background: transparent;
+  color: var(--tg-icon-stroke);
+  opacity: var(--tg-icon-button-idle-opacity);
+  cursor: pointer;
+  transition:
+    opacity var(--tg-duration-icon) var(--tg-ease-out),
+    background var(--tg-duration-icon) var(--tg-ease-out);
+}
+
+.iconButton:hover:not(:disabled) {
+  opacity: 1;
+  background: var(--tg-surface-icon-hover);
+}
+
+.iconButton:disabled {
+  cursor: default;
+}
+
+.icon {
+  width: 15px;
+  height: 15px;
+}
+
+@keyframes tg-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.spinning {
+  animation: tg-spin var(--tg-duration-refresh-spin) linear infinite;
+}
+
+@keyframes tg-scan {
+  from {
+    transform: translateX(-120%);
+  }
+  to {
+    transform: translateX(520%);
+  }
+}
+
+/* One hairline sweeping under the toolbar while a refresh runs. The list below keeps its
+   numbers - refreshing is not a loading state. */
+.scan {
+  position: absolute;
+  left: 0;
+  bottom: calc(-1 * var(--tg-panel-hairline));
+  width: 20%;
+  height: var(--tg-panel-hairline);
+  /* Fades in and out along its own length, so it reads as a sweep rather than as a block sliding
+     past. The panel's `overflow: hidden` is what clips it at either end. */
+  background: linear-gradient(90deg, transparent, var(--tg-brand), transparent);
+  animation: tg-scan var(--tg-duration-scan) linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinning,
+  .scan {
+    animation: none;
+  }
+}
+
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: var(--tg-list-max-height);
+  overflow-y: auto;
+}
+
+.message {
+  margin: 0;
+  padding: var(--tg-overlay-padding);
+  font-size: var(--tg-text-email-size);
+  font-weight: var(--tg-text-body-weight);
+  color: var(--tg-text-secondary);
+}
+
+.empty {
+  padding: 32px 26px 28px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.emptyMark {
+  width: var(--tg-empty-mark-size);
+  height: var(--tg-empty-mark-size);
+  opacity: var(--tg-mark-opacity);
+}
+
+.emptyTitle {
+  margin: 14px 0 0;
+  font-size: var(--tg-text-account-size);
+  font-weight: var(--tg-text-account-weight);
+  color: var(--tg-text-primary);
+}
+
+.emptyBody {
+  margin: 6px 0 0;
+  max-width: var(--tg-empty-body-width);
+  font-size: var(--tg-text-email-size);
+  font-weight: var(--tg-text-body-weight);
+  line-height: 1.55;
+  color: var(--tg-text-secondary);
+  text-wrap: pretty;
+}
+
+.emptyAction {
+  margin-top: 16px;
+  height: var(--tg-button-height);
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--tg-button-radius);
+  background: var(--tg-button-primary-bg);
+  color: var(--tg-button-primary-text);
+  font-size: var(--tg-text-button-size);
+  font-weight: var(--tg-text-tag-weight);
+  cursor: pointer;
+  transition: opacity var(--tg-duration-icon) var(--tg-ease-out);
+}
+
+.emptyAction:hover {
+  opacity: 0.86;
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: var(--tg-footer-height);
+  padding: 0 14px;
+  border-top: var(--tg-panel-hairline) solid var(--tg-line-divider);
+}
+
+.dot {
+  width: var(--tg-footer-dot-size);
+  height: var(--tg-footer-dot-size);
+  flex: none;
+  border-radius: 50%;
+}
+
+.ok {
+  background: var(--tg-quota-healthy);
+}
+
+.warn {
+  background: var(--tg-quota-warn);
+}
+
+.bad {
+  background: var(--tg-quota-low);
+}
+
+.mute {
+  background: var(--tg-status-mute);
+}
+
+.status {
+  font-size: var(--tg-text-footer-size);
+  font-weight: var(--tg-text-body-weight);
+  color: var(--tg-text-secondary);
+  font-variant-numeric: tabular-nums;
+}

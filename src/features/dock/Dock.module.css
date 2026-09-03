@@ -1,0 +1,230 @@
+/*
+ * The docked surface inside a window that never changes size.
+ *
+ * The window is a strip as tall as the work area; this box is that strip less the room above and
+ * below that the shadows need. The bar sits in it at the offset the user dragged it to, the panel
+ * is centred on the bar and kept inside the box, and the nub bridges the two at the bar's centre.
+ * Everything is placed from two variables Dock.tsx writes on this element: the stored offset and
+ * the panel's measured height.
+ *
+ * The 9px gap between panel and bar is the panel wrapper's padding, so crossing it is not
+ * leaving; the nub reaches 4.5px back over the panel's stroke and 0.5px into the bar, exactly as
+ * the design draws it (14 = 4.5 + 9 + 0.5).
+ */
+
+.dock {
+  position: absolute;
+  top: var(--tg-window-room-above);
+  bottom: var(--tg-window-room-below);
+  left: 0;
+  right: 0;
+  /* Written by Dock.tsx. Zero until then, which is a bar centred on the work area. */
+  --tg-dock-offset: 0px;
+  --tg-panel-height: 0px;
+  --tg-nub-scrim-shift: 0px;
+  /* The bar's top edge, measured from this box's top. The offset is from the *window's* centre,
+     and the box is inset unevenly - 24 above, 58 below - so the window's centre sits
+     (58 - 24) / 2 below the box's. Clamped to keep the bar inside the box, which is the same
+     clamp Rust applies to the stored offset before storing it. */
+  --tg-bar-top: clamp(
+    0px,
+    calc(
+      50% + (var(--tg-window-room-below) - var(--tg-window-room-above)) / 2 +
+        var(--tg-dock-offset) - var(--tg-bar-height) / 2
+    ),
+    calc(100% - var(--tg-bar-height))
+  );
+  --tg-bar-centre: calc(var(--tg-bar-top) + var(--tg-bar-height) / 2);
+}
+
+/* One shadow for the whole surface while it is open, which is how the design draws it: the panel,
+   the nub and the bar cast together. The bar's own shadow is switched off for the duration -
+   stacking the two darkens the seam between nub and bar into a visible edge. */
+.expanded {
+  filter: var(--tg-shadow-panel);
+  --tg-shadow-bar: none;
+}
+
+/* Measured, not assumed: sampling the screen every few milliseconds while the panel opened
+   caught frames in which the whole surface - bar included - was not drawn at all. Each fell where
+   the compositor was making or dropping a layer: the shadow arriving on this box, the panel's
+   slide starting and ending. Keeping those layers for the life of the element gives it nothing
+   to rebuild in the middle of a frame. */
+.dock {
+  will-change: filter;
+}
+
+.panelWrap,
+.nub {
+  will-change: transform, opacity;
+}
+
+/*
+ * `--tg-inward-sign` is the whole of the mirror: +1 when the screen's interior is to the right of
+ * the bar, -1 when it is to the left. Everything that has a direction rather than just a position
+ * - the row's hover nudge, the chevron's entrance, the panel's 6px slide - multiplies by it
+ * instead of carrying a left and a right copy of itself.
+ */
+.right {
+  --tg-inward-sign: -1;
+}
+
+.left {
+  --tg-inward-sign: 1;
+}
+
+/* The bar, flush against the edge, with the hit buffer as padding on its inward
+   side: the hover target reaches 8px further into the screen than the bar does, so a pointer
+   arriving meets the buffer before the bar. Padding on the target itself, because a pointer over
+   the window but outside this element is not over the target at all. */
+.barWrap {
+  position: absolute;
+  top: var(--tg-bar-top);
+  display: flex;
+}
+
+.right .barWrap {
+  right: 0;
+  padding-left: var(--tg-bar-hit-buffer);
+}
+
+.left .barWrap {
+  left: 0;
+  padding-right: var(--tg-bar-hit-buffer);
+}
+
+/* The panel, centred on the bar. When that would push it past the top or bottom of the box it
+   slides just far enough to stay inside; the bar itself does not move to meet it. Taller than
+   the box - which no work area the design covers is - it keeps to the top. */
+.panelWrap {
+  position: absolute;
+  top: clamp(
+    0px,
+    calc(var(--tg-bar-centre) - var(--tg-panel-height) / 2),
+    max(0px, calc(100% - var(--tg-panel-height)))
+  );
+  display: flex;
+}
+
+.right .panelWrap {
+  right: var(--tg-bar-width);
+  padding-right: var(--tg-panel-gap);
+}
+
+.left .panelWrap {
+  left: var(--tg-bar-width);
+  padding-left: var(--tg-panel-gap);
+}
+
+/* The nub sits at the bar's centre whatever the panel did, its tip half a pixel into the bar.
+   Above the panel so its fill can cover the panel's own stroke. */
+.nub {
+  position: absolute;
+  top: calc(var(--tg-bar-centre) - var(--tg-nub-height) / 2);
+  display: block;
+  z-index: 1;
+}
+
+.right .nub {
+  right: calc(var(--tg-bar-width) - var(--tg-nub-tip-gap) / 2);
+}
+
+/* The panel's scrim drawn over the nub, clipped to the nub's outline (the clip path is set by
+   Dock.tsx from the same shape the nub is drawn with). The gradient is the panel's own, sized to
+   the panel's height and shifted so its origin is the panel's top: the nub then shows exactly the
+   band of the scrim that the panel shows at the same height, and the two read as one dimmed
+   surface. Mirrored with the nub. */
+.nubScrim {
+  position: absolute;
+  inset: 0;
+  background-image: var(--tg-scrim);
+  background-size: 100% var(--tg-panel-height);
+  background-repeat: no-repeat;
+  background-position: 0 var(--tg-nub-scrim-shift);
+  pointer-events: none;
+  /* The nub's own drawing is positioned and raised to cover the panel's border; the scrim has to
+     sit above that or it is painted underneath the fill it is meant to dim. */
+  z-index: 1;
+}
+
+/* Left-docked the nub is mirrored. Geometry mirrors; the text inside the panel does not. */
+.left .nub {
+  left: calc(var(--tg-bar-width) - var(--tg-nub-tip-gap) / 2);
+  transform: scaleX(-1);
+}
+
+/* Outward is the bar's direction, so the panel arrives from it: the negative of inward. */
+@keyframes tg-panel-in {
+  from {
+    opacity: 0;
+    transform: translateX(calc(-1 * var(--tg-inward-sign) * var(--tg-panel-enter-shift)));
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes tg-panel-out {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: translateX(calc(-1 * var(--tg-inward-sign) * var(--tg-panel-enter-shift)));
+  }
+}
+
+/*
+ * The stages of opening (Dock.tsx). The panel and the nub:
+ *
+ * - `open`: slide in from the bar's direction and fade, starting in the frame they
+ *   render - the window is already its final size, because it always is.
+ * - `leaving`: the reverse, held on screen for the collapse duration before they unmount.
+ *
+ * Position, size and opacity only. The nub is mirrored on the left by its own transform, so it
+ * only fades there rather than fighting that transform with the slide.
+ */
+.open .panelWrap {
+  animation: tg-panel-in var(--tg-duration-expand) var(--tg-ease-standard);
+}
+
+.open .nub {
+  animation: tg-fade-in var(--tg-duration-expand) var(--tg-ease-standard);
+}
+
+.leaving .panelWrap {
+  animation: tg-panel-out var(--tg-duration-collapse) var(--tg-ease-out) forwards;
+}
+
+.leaving .nub {
+  animation: tg-fade-out var(--tg-duration-collapse) var(--tg-ease-out) forwards;
+}
+
+@keyframes tg-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes tg-fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .open .panelWrap,
+  .open .nub,
+  .leaving .panelWrap,
+  .leaving .nub {
+    animation: none;
+  }
+}

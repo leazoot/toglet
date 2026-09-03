@@ -1,0 +1,155 @@
+/*
+ * The collapsed bar. 60 wide, 168 tall, flush against the screen edge.
+ *
+ * The window itself is 68 wide: the bar plus the 8px inward hit buffer, which has to be part of
+ * the window because a pointer only reaches what a window occupies. The buffer is the
+ * transparent strip on the inward side.
+ */
+
+.bar {
+  position: relative;
+  flex: none;
+  width: var(--tg-bar-width);
+  height: var(--tg-bar-height);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--tg-bar-gap);
+  background: var(--tg-surface-base);
+  box-shadow: var(--tg-shadow-bar);
+  /* One hairline, drawn inside so it cannot round differently from the background at 125%. */
+  outline: var(--tg-panel-hairline) solid var(--tg-line-bar-outline);
+  outline-offset: calc(-1 * var(--tg-panel-hairline));
+}
+
+/* The panel-side corners are rounded, the screen-side ones square, so the bar sits flush. */
+.right {
+  border-radius: var(--tg-bar-radius) 0 0 var(--tg-bar-radius);
+}
+
+.left {
+  border-radius: 0 var(--tg-bar-radius) var(--tg-bar-radius) 0;
+}
+
+.avatar {
+  position: relative;
+  width: var(--tg-bar-avatar-size);
+  height: var(--tg-bar-avatar-size);
+  flex: none;
+  border-radius: 50%;
+  background: var(--tg-surface-avatar-well);
+  box-shadow: inset 0 0 0 var(--tg-panel-hairline) var(--tg-bar-accent-ring, var(--tg-line-outline));
+  display: grid;
+  place-items: center;
+}
+
+/* No account yet: the well is outlined, not filled, and holds no initial. */
+.avatar[data-empty="true"] {
+  background: transparent;
+  box-shadow: none;
+  outline: var(--tg-panel-hairline) dashed var(--tg-line-track);
+  outline-offset: calc(-1 * var(--tg-panel-hairline));
+}
+
+.initial {
+  font-size: var(--tg-text-bar-initial-size);
+  font-weight: var(--tg-text-tag-weight);
+  color: var(--tg-bar-accent, var(--tg-text-secondary));
+}
+
+/* The five identity colours. Only ever the hairline ring and the initial - never
+   a fill, never a background. */
+.avatar[data-accent="1"] {
+  --tg-bar-accent: var(--tg-accent-1);
+  --tg-bar-accent-ring: var(--tg-accent-1-ring);
+}
+
+.avatar[data-accent="2"] {
+  --tg-bar-accent: var(--tg-accent-2);
+  --tg-bar-accent-ring: var(--tg-accent-2-ring);
+}
+
+.avatar[data-accent="3"] {
+  --tg-bar-accent: var(--tg-accent-3);
+  --tg-bar-accent-ring: var(--tg-accent-3-ring);
+}
+
+.avatar[data-accent="4"] {
+  --tg-bar-accent: var(--tg-accent-4);
+  --tg-bar-accent-ring: var(--tg-accent-4-ring);
+}
+
+.avatar[data-accent="5"] {
+  --tg-bar-accent: var(--tg-accent-5);
+  --tg-bar-accent-ring: var(--tg-accent-5-ring);
+}
+
+/* The amber dot: something needs the user. Ringed in the bar's own surface so it reads as a
+   badge rather than as part of the avatar. */
+.notice {
+  position: absolute;
+  right: calc(-1 * var(--tg-bar-badge-outline));
+  top: calc(-1 * var(--tg-bar-badge-outline));
+  width: var(--tg-bar-badge-size);
+  height: var(--tg-bar-badge-size);
+  border-radius: 50%;
+  background: var(--tg-quota-warn);
+  box-shadow: 0 0 0 var(--tg-bar-badge-outline) var(--tg-surface-base);
+}
+
+/* The empty state's add button, at the quota ring's size and in its place. */
+.add {
+  position: relative;
+  width: var(--tg-ring-size);
+  height: var(--tg-ring-size);
+  flex: none;
+  display: grid;
+  place-items: center;
+  border: 0;
+  padding: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--tg-text-secondary);
+  cursor: pointer;
+  transition:
+    color var(--tg-duration-icon) var(--tg-ease-out),
+    background-color var(--tg-duration-icon) var(--tg-ease-out);
+}
+
+.add:hover {
+  color: var(--tg-brand);
+  background: var(--tg-surface-icon-hover);
+}
+
+.addRing {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* The same dashed track a ring without a reading draws (QuotaRing `.trackUnread`). */
+.addTrack {
+  fill: none;
+  stroke: var(--tg-quota-unreadable);
+  stroke-dasharray: var(--tg-ring-track-dash);
+}
+
+.addIcon {
+  position: relative;
+  width: var(--tg-bar-add-icon-size);
+  height: var(--tg-bar-add-icon-size);
+}
+
+/* Reaches assistive technology and the tooltip, takes no space and shows nothing. */
+.hidden {
+  position: absolute;
+  width: var(--tg-panel-hairline);
+  height: var(--tg-panel-hairline);
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

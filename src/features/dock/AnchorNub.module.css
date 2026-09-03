@@ -1,0 +1,19 @@
+/* The 14 × 28 connector. */
+
+.nub {
+  width: var(--tg-nub-width);
+  height: var(--tg-nub-height);
+  flex: none;
+  display: block;
+  /* Above the panel so the fill can cover the panel's own border. */
+  position: relative;
+  z-index: 1;
+}
+
+.fill {
+  fill: var(--tg-surface-base);
+}
+
+.stroke {
+  stroke: var(--tg-line-outline);
+}

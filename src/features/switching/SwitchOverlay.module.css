@@ -1,0 +1,185 @@
+/* The switch overlays. Rises from the panel's bottom edge. */
+
+.scrim {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  padding: var(--tg-overlay-padding);
+  /* The list stays visible behind it. */
+  background: var(--tg-scrim);
+}
+
+@keyframes tg-overlay-rise {
+  from {
+    opacity: 0;
+    transform: translateY(var(--tg-overlay-enter-shift));
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.sheet {
+  width: 100%;
+  padding: 14px 14px 12px;
+  border-radius: var(--tg-overlay-radius);
+  background: var(--tg-surface-overlay);
+  box-shadow:
+    inset 0 0 0 var(--tg-panel-hairline) var(--tg-line-overlay-outline),
+    var(--tg-shadow-overlay);
+  animation: tg-overlay-rise var(--tg-duration-overlay) var(--tg-ease-standard);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sheet {
+    animation: none;
+  }
+}
+
+.heading {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  font-size: var(--tg-text-heading-size);
+  font-weight: var(--tg-text-account-weight);
+  letter-spacing: var(--tg-text-heading-tracking);
+  color: var(--tg-text-primary);
+}
+
+.body {
+  margin: 5px 0 0;
+  font-size: var(--tg-text-email-size);
+  font-weight: var(--tg-text-body-weight);
+  line-height: 1.5;
+  color: var(--tg-text-label);
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 50%;
+}
+
+.ok {
+  background: var(--tg-quota-healthy);
+}
+
+.warn {
+  background: var(--tg-quota-warn);
+}
+
+.bad {
+  background: var(--tg-quota-low);
+}
+
+.success {
+  display: flex;
+  align-items: center;
+  gap: var(--tg-row-gap);
+}
+
+.steps {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 11px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.step {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: var(--tg-text-email-size);
+  color: var(--tg-text-tertiary);
+  white-space: nowrap;
+}
+
+/* Only the steps Rust said finished. Nothing here is driven by time. */
+.stepDone {
+  color: var(--tg-text-primary);
+}
+
+.stepDot {
+  width: 13px;
+  height: 13px;
+  flex: none;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 var(--tg-panel-hairline) var(--tg-line-outline);
+  transition: background var(--tg-duration-quota) var(--tg-ease-standard);
+}
+
+.stepDone .stepDot {
+  background: var(--tg-brand);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+  margin-top: 13px;
+}
+
+.primary,
+.secondary,
+.link {
+  height: var(--tg-button-height);
+  border: 0;
+  border-radius: var(--tg-button-radius);
+  font-size: var(--tg-text-button-size);
+  cursor: pointer;
+  transition:
+    background var(--tg-duration-icon) var(--tg-ease-out),
+    opacity var(--tg-duration-icon) var(--tg-ease-out);
+}
+
+.primary {
+  padding: 0 12px;
+  font-weight: var(--tg-text-tag-weight);
+  background: var(--tg-button-primary-bg);
+  color: var(--tg-button-primary-text);
+}
+
+.primary:hover {
+  opacity: 0.86;
+}
+
+.secondary {
+  padding: 0 12px;
+  font-weight: 500;
+  background: var(--tg-surface-button);
+  color: var(--tg-button-secondary-text);
+}
+
+.secondary:hover {
+  background: var(--tg-surface-button-hover);
+}
+
+/* The weakened action. Never styled as the thing to press. */
+.link {
+  margin-right: auto;
+  padding: 0;
+  background: transparent;
+  color: var(--tg-text-secondary);
+  border-bottom: var(--tg-panel-hairline) solid var(--tg-line-divider);
+  border-radius: 0;
+  height: auto;
+}
+
+.details {
+  margin: 10px 0 0;
+  padding: 8px 9px;
+  border-radius: var(--tg-button-radius);
+  background: var(--tg-surface-base);
+  box-shadow: inset 0 0 0 var(--tg-panel-hairline) var(--tg-line-outline);
+  font-family: var(--tg-font-mono);
+  font-size: var(--tg-text-tag-size);
+  line-height: 1.6;
+  color: var(--tg-text-secondary);
+}

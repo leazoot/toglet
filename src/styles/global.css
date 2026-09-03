@@ -1,0 +1,51 @@
+/*
+ * Document-level defaults. Everything visual comes from src/styles/tokens.css - no literal
+ * colour or size may appear below.
+ */
+
+@import "./tokens.css";
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: var(--tg-font-sans);
+  color: var(--tg-text-primary);
+  /* The window is transparent: it is wider than the bar by the 8px inward hit buffer, and that
+     strip has to let the desktop through. Only the bar and, later, the panel paint a surface. */
+  background: transparent;
+  /* Every digit in the interface is a quota percentage, a countdown or a count, and all of
+     them change in place. Proportional digits would make them jitter. */
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Toglet is a docked overlay: the window is exactly as large as its content and nothing in it
+   scrolls except the account list, which manages its own overflow. */
+body {
+  overflow: hidden;
+}
+
+/* The bar is positioned against one edge of this box, and the remaining strip is the hit buffer
+   the design asks for. Nothing is selectable or draggable as an image: this is a
+   piece of desktop furniture, not a document. */
+#root {
+  position: relative;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+:focus-visible {
+  outline: 1px solid var(--tg-focus-ring);
+  outline-offset: 1px;
+}
