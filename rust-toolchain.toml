@@ -1,0 +1,7 @@
+# Pinned exactly (not "stable") on purpose: rustfmt and clippy must behave identically on
+# Windows, macOS and CI. A floating channel would let one platform report warnings the
+# others never see. The declared minimum supported version lives in src-tauri/Cargo.toml.
+[toolchain]
+channel = "1.94.0"
+components = ["rustfmt", "clippy"]
+profile = "minimal"

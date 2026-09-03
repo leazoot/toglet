@@ -1,0 +1,44 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build output
+dist/
+src-tauri/target/
+src-tauri/gen/
+
+# Credentials and anything that could contain them.
+# Toglet manages Codex authentication; a single leaked file here is a real account
+# compromise, so these patterns are deliberately broad.
+auth*.json
+*.auth.json
+.codex/
+*.pem
+*.key
+*.p12
+*.pfx
+*.keystore
+secrets.*
+.env
+.env.*
+!.env.example
+
+# Scratch output written next to local verification scripts.
+spikes/
+scripts/
+
+# Backups produced by switch operations or verification runs.
+*.bak
+*-backup/
+backup/
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Local tool caches
+.eslintcache
+*.tsbuildinfo
