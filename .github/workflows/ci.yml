@@ -1,0 +1,75 @@
+name: CI
+
+# Runs on release tags, and on demand from the Actions tab. Everyday pushes are not
+# checked here: the same commands run locally through `pnpm check`.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web:
+    name: Interface
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm exec prettier --check .
+      - run: pnpm exec eslint .
+      - run: pnpm typecheck
+      - run: pnpm test:web
+
+  core:
+    name: Core (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # A handful of tests drive the real `codex app-server`. They need no account and no
+      # network, but they do need it installed. This also exercises the resolver against a
+      # genuine npm install on both platforms.
+      - run: npm install --global @openai/codex
+
+      # Printed because the package moves its executable around between releases, and a
+      # resolver that cannot find it turns into six confusing test failures.
+      - name: Show where the Codex executable landed
+        shell: bash
+        run: |
+          echo "prefix: $(npm prefix -g)"
+          echo "root:   $(npm root -g)"
+          command -v codex || true
+          find "$(npm root -g)" -type f -name 'codex*' 2>/dev/null | head -20
+
+      - run: codex --version
+
+      # Installs the exact toolchain and components pinned in rust-toolchain.toml.
+      - run: rustup show
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - run: cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check
+      - run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+      - run: cargo test --manifest-path src-tauri/Cargo.toml
