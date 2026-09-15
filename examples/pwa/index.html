@@ -1,0 +1,873 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#080A0C" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#F5F6F3" media="(prefers-color-scheme: light)" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <title>Toglet Remote</title>
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+
+      :root {
+        --base: #080a0c;
+        --soft: rgba(255, 255, 255, 0.045);
+        --press: rgba(255, 255, 255, 0.075);
+        --hairline: rgba(255, 255, 255, 0.08);
+        --t1: #f4f6f5;
+        --t2: #a0a6a4;
+        --t3: #707774;
+        --muted: #4e5356;
+        --mint: #4be7a5;
+        --mint-rgb: 75, 231, 165;
+        --on-mint: #04180f;
+        --amber: #f2c45e;
+        --amber-rgb: 242, 196, 94;
+        --coral: #ff745f;
+        --coral-rgb: 255, 116, 95;
+        --offline: #767d80;
+        --orbit: rgba(255, 255, 255, 0.08);
+        --orbit-faint: rgba(255, 255, 255, 0.055);
+        --core-fill: rgba(255, 255, 255, 0.022);
+        --core-line: rgba(255, 255, 255, 0.09);
+        --node-empty: rgba(255, 255, 255, 0.18);
+        --rail-rest: rgba(255, 255, 255, 0.1);
+        --home: rgba(244, 246, 245, 0.22);
+      }
+
+      @media (prefers-color-scheme: light) {
+        :root {
+          --base: #f5f6f3;
+          --soft: rgba(0, 0, 0, 0.035);
+          --press: rgba(0, 0, 0, 0.06);
+          --hairline: rgba(0, 0, 0, 0.08);
+          --t1: #151817;
+          --t2: #666d69;
+          --t3: #8a918d;
+          --muted: #9aa19d;
+          --mint: #118a5b;
+          --mint-rgb: 17, 138, 91;
+          --on-mint: #ffffff;
+          --amber: #a97612;
+          --amber-rgb: 169, 118, 18;
+          --coral: #c9523e;
+          --coral-rgb: 201, 82, 62;
+          --orbit: rgba(0, 0, 0, 0.1);
+          --orbit-faint: rgba(0, 0, 0, 0.07);
+          --core-fill: #ffffff;
+          --core-line: rgba(0, 0, 0, 0.08);
+          --node-empty: rgba(0, 0, 0, 0.2);
+          --rail-rest: rgba(0, 0, 0, 0.1);
+          --home: rgba(21, 24, 23, 0.22);
+        }
+      }
+
+      @keyframes tgOrbit {
+        from {
+          transform: rotate(0deg);
+        }
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      @keyframes tgBreathe {
+        0%,
+        100% {
+          transform: scale(1);
+        }
+        50% {
+          transform: scale(1.025);
+        }
+      }
+      @keyframes tgGlow {
+        0%,
+        100% {
+          opacity: 0.72;
+        }
+        50% {
+          opacity: 1;
+        }
+      }
+      @keyframes tgSlowPulse {
+        0%,
+        100% {
+          opacity: 0.34;
+          transform: scale(0.985);
+        }
+        50% {
+          opacity: 1;
+          transform: scale(1.015);
+        }
+      }
+      @keyframes tgLiveDot {
+        0%,
+        100% {
+          opacity: 0.55;
+          transform: scale(0.9);
+        }
+        50% {
+          opacity: 1;
+          transform: scale(1);
+        }
+      }
+      @keyframes tgBlink {
+        0%,
+        46% {
+          opacity: 1;
+        }
+        50%,
+        96% {
+          opacity: 0;
+        }
+        100% {
+          opacity: 1;
+        }
+      }
+      @keyframes tgTravel {
+        0% {
+          transform: translateX(0);
+          opacity: 0;
+        }
+        16% {
+          opacity: 1;
+        }
+        84% {
+          opacity: 1;
+        }
+        100% {
+          transform: translateX(var(--rail-span, 140px));
+          opacity: 0;
+        }
+      }
+      @keyframes tgFadeDown {
+        from {
+          opacity: 0;
+          transform: translateY(-4px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      @keyframes tgRise {
+        from {
+          opacity: 0;
+          transform: translateY(8px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      @keyframes tgScan {
+        from {
+          opacity: 0.5;
+          transform: scale(0.7);
+        }
+        to {
+          opacity: 0;
+          transform: scale(1.35);
+        }
+      }
+
+      html,
+      body {
+        height: 100%;
+      }
+      body {
+        margin: 0;
+        background: var(--base);
+        color: var(--t1);
+        font-family:
+          -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "PingFang SC",
+          "Microsoft YaHei", sans-serif;
+        font-variant-numeric: tabular-nums;
+        -webkit-font-smoothing: antialiased;
+        overscroll-behavior: none;
+      }
+      #app {
+        min-height: 100dvh;
+        display: flex;
+        flex-direction: column;
+        padding-top: env(safe-area-inset-top);
+      }
+      #app.offline {
+        animation: tgFadeDown 0.5s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+      }
+
+      /* ---- Micro Header (48) ---- */
+      .header {
+        flex: none;
+        height: 48px;
+        padding: 0 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 14.5px;
+        font-weight: 600;
+        letter-spacing: -0.012em;
+      }
+      .brand.quiet {
+        color: var(--t2);
+      }
+      .brand.dead {
+        color: var(--t3);
+      }
+      .link {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--t2);
+      }
+      .link i {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--offline);
+        display: block;
+        flex: none;
+      }
+      .link.live i {
+        background: var(--mint);
+      }
+      .link.busy i {
+        background: var(--amber);
+      }
+      .link.down,
+      .link.idle {
+        color: var(--offline);
+      }
+
+      /* ---- Status Stage ---- */
+      .stage {
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 0 26px;
+      }
+      .stage.top {
+        justify-content: flex-start;
+        padding-top: 6px;
+      }
+      .core {
+        position: relative;
+        width: 200px;
+        height: 200px;
+        flex: none;
+        transition:
+          width 0.36s cubic-bezier(0.2, 0.7, 0.3, 1),
+          height 0.36s cubic-bezier(0.2, 0.7, 0.3, 1);
+      }
+      .core.small {
+        width: 172px;
+        height: 172px;
+      }
+      .core > svg {
+        display: block;
+        position: relative;
+        width: 100%;
+        height: 100%;
+      }
+      .glow {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: var(--glow-size, 290px);
+        height: var(--glow-size, 290px);
+        transform: translate(-50%, -50%);
+        border-radius: 50%;
+        pointer-events: none;
+      }
+      .scan {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: 200px;
+        height: 200px;
+        margin: -100px 0 0 -100px;
+        border-radius: 50%;
+        box-shadow: 0 0 0 1.5px var(--mint);
+        opacity: 0;
+        pointer-events: none;
+        animation: tgScan 0.6s ease-out 1;
+      }
+      .centre {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .centre.stack {
+        flex-direction: column;
+        gap: 4px;
+      }
+      .countdown {
+        font-family: ui-monospace, "SF Mono", Menlo, monospace;
+        font-size: 31px;
+        font-weight: 600;
+        letter-spacing: -0.02em;
+        color: var(--amber);
+      }
+      .countdown-label {
+        font-size: 10.5px;
+        font-weight: 500;
+        letter-spacing: 0.1em;
+        color: var(--t3);
+      }
+      .live-dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: var(--mint);
+        display: block;
+        animation: tgLiveDot 2.8s ease-in-out infinite;
+      }
+      .stop-bar {
+        width: 15px;
+        height: 3px;
+        border-radius: 2px;
+        background: var(--coral);
+        display: block;
+        opacity: 0.85;
+      }
+      .dead-bar {
+        width: 17px;
+        height: 2.5px;
+        border-radius: 2px;
+        background: var(--muted);
+        display: block;
+      }
+      .pause-mark {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 5px;
+      }
+      .pause-mark i {
+        width: 3px;
+        height: 15px;
+        border-radius: 2px;
+        background: var(--offline);
+        display: block;
+      }
+      .caret {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+      }
+      .caret i {
+        width: 11px;
+        height: 2.5px;
+        border-radius: 1.5px;
+        background: var(--amber);
+        display: block;
+        animation: tgBlink 1.15s steps(1, end) infinite;
+      }
+
+      .status {
+        margin: var(--core-gap, 30px) 0 0;
+        font-size: 34px;
+        font-weight: 680;
+        letter-spacing: -0.028em;
+        line-height: 1.05;
+        text-align: center;
+      }
+      .status.soft {
+        color: var(--t2);
+      }
+      .status.dead {
+        color: var(--offline);
+      }
+      .status.small {
+        font-size: 30px;
+      }
+      .status.pair {
+        font-size: 33px;
+        line-height: 1.06;
+      }
+      .reason {
+        margin: 12px 0 0;
+        font-size: 15.5px;
+        font-weight: 450;
+        line-height: 1.45;
+        color: var(--t2);
+        text-align: center;
+      }
+      .reason.dead {
+        color: var(--t3);
+      }
+      .meta {
+        margin: 9px 0 0;
+        font-size: 12.5px;
+        font-weight: 450;
+        color: var(--t3);
+        text-align: center;
+      }
+
+      /* ---- Context Section ---- */
+      .context {
+        flex: none;
+        padding: 0 24px;
+      }
+      .rule {
+        height: 1px;
+        background: var(--hairline);
+        margin-bottom: 14px;
+      }
+      .at-machine {
+        display: flex;
+        gap: 11px;
+        align-items: flex-start;
+      }
+      .at-machine svg {
+        flex: none;
+        margin-top: 1px;
+      }
+      .at-machine p {
+        margin: 0;
+      }
+      .at-machine .lead {
+        font-size: 14.5px;
+        font-weight: 500;
+        line-height: 1.45;
+        color: var(--t1);
+      }
+      .at-machine .tail {
+        margin-top: 5px;
+        font-size: 12.5px;
+        line-height: 1.6;
+        color: var(--t3);
+      }
+      .surface {
+        border-radius: 15px;
+        background: var(--soft);
+        padding: 15px 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .surface-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .surface-head span:first-child {
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.09em;
+        color: var(--t3);
+      }
+      .surface-head time {
+        font-size: 11.5px;
+        color: var(--t3);
+      }
+      .surface-body {
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+      }
+      .surface-body b {
+        font-size: 16px;
+        font-weight: 600;
+        letter-spacing: -0.015em;
+        color: var(--t3);
+      }
+      .surface-body span {
+        font-size: 13px;
+        color: var(--t3);
+      }
+      .aside {
+        margin: 12px 2px 0;
+        font-size: 12.5px;
+        line-height: 1.6;
+        color: var(--t3);
+      }
+
+      /* ---- Command Trace ---- */
+      .trace {
+        animation: tgRise 0.36s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+      }
+      .trace .rule {
+        margin-bottom: 18px;
+      }
+      .trace-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 16px;
+      }
+      .trace-head span {
+        font-size: 11.5px;
+        font-weight: 600;
+        letter-spacing: 0.09em;
+        color: var(--t3);
+      }
+      .trace-head time {
+        font-family: ui-monospace, "SF Mono", Menlo, monospace;
+        font-size: 11.5px;
+        color: var(--t3);
+      }
+      .rail {
+        display: flex;
+        align-items: center;
+      }
+      .node {
+        width: 11px;
+        height: 11px;
+        border-radius: 50%;
+        flex: none;
+        display: block;
+        box-shadow: inset 0 0 0 1.5px var(--node-empty);
+      }
+      .node.done {
+        background: var(--mint);
+        box-shadow: none;
+      }
+      .seg {
+        flex: 1;
+        height: 1.5px;
+        background: var(--rail-rest);
+        margin: 0 5px;
+        position: relative;
+      }
+      .seg.done {
+        background: linear-gradient(90deg, var(--mint), var(--rail-rest));
+      }
+      .seg.active {
+        background: linear-gradient(90deg, var(--mint), var(--rail-rest));
+      }
+      .seg.active i {
+        position: absolute;
+        top: -1.75px;
+        left: 0;
+        width: 5px;
+        height: 5px;
+        border-radius: 50%;
+        background: var(--mint);
+        display: block;
+        animation: tgTravel 1.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+      }
+      .rail-labels {
+        display: flex;
+        margin-top: 10px;
+      }
+      .rail-labels span {
+        flex: 1;
+        font-size: 11.5px;
+        font-weight: 500;
+        color: var(--t3);
+      }
+      .rail-labels span:nth-child(2) {
+        text-align: center;
+      }
+      .rail-labels span:nth-child(3) {
+        text-align: right;
+      }
+      .rail-labels span.done {
+        color: var(--mint);
+      }
+      .trace .why {
+        margin: 16px 0 0;
+        font-size: 12.5px;
+        line-height: 1.6;
+        color: var(--amber);
+      }
+
+      /* ---- Action Dock ---- */
+      .dock {
+        flex: none;
+        position: sticky;
+        bottom: 0;
+        background: var(--base);
+        padding: 14px 24px 0;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .dock.spaced {
+        padding-top: 18px;
+      }
+      .dock .row {
+        display: flex;
+        gap: 10px;
+      }
+      .hint {
+        margin: 0 0 2px;
+        text-align: center;
+        font-size: 12.5px;
+        line-height: 1.5;
+        color: var(--t3);
+      }
+      button {
+        font-family: inherit;
+        border: 0;
+        cursor: pointer;
+        -webkit-tap-highlight-color: transparent;
+        /* Cancel is a 600ms hold, which platforms also read as text selection (iOS callout,
+           desktop drag-select); either would steal the pointer from the hold. */
+        -webkit-touch-callout: none;
+        -webkit-user-select: none;
+        user-select: none;
+        touch-action: manipulation;
+      }
+      .primary {
+        width: 100%;
+        height: 54px;
+        border-radius: 15px;
+        background: var(--mint);
+        color: var(--on-mint);
+        font-size: 16px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        transition: transform 0.1s ease-out;
+      }
+      .primary:active {
+        transform: scale(0.98);
+      }
+      .secondary {
+        flex: 1;
+        height: 48px;
+        border-radius: 14px;
+        background: var(--soft);
+        box-shadow: inset 0 0 0 1px var(--hairline);
+        color: var(--t1);
+        font-size: 15px;
+        font-weight: 600;
+        position: relative;
+        overflow: hidden;
+        transition: transform 0.12s ease-out;
+      }
+      .secondary:active {
+        transform: scale(0.985);
+      }
+      .secondary.wide {
+        width: 100%;
+        flex: none;
+      }
+      .danger {
+        color: var(--coral);
+      }
+      .danger.arming {
+        box-shadow: inset 0 0 0 1px rgba(var(--coral-rgb), 0.28);
+        transform: scale(0.985);
+      }
+      .fill {
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 0;
+        background: linear-gradient(
+          90deg,
+          rgba(var(--coral-rgb), 0.14),
+          rgba(var(--coral-rgb), 0.3)
+        );
+        display: block;
+      }
+      /* The 1.5px leading edge belongs to a sweep in progress; at rest a zero-width fill would
+         still paint its border down the side of the button. */
+      .danger.arming .fill {
+        border-right: 1.5px solid var(--coral);
+      }
+      .neutral {
+        width: 100%;
+        height: 52px;
+        border-radius: 15px;
+        background: var(--press);
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+        color: var(--t1);
+        font-size: 16px;
+        font-weight: 600;
+      }
+      @media (prefers-color-scheme: light) {
+        .neutral {
+          box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.1);
+        }
+      }
+      /* Unpair: quieter than Retry, which is the first thing to try. */
+      .dock button.quiet {
+        width: 100%;
+        height: 44px;
+        border-radius: 14px;
+        background: transparent;
+        color: var(--t3);
+        font-size: 14px;
+        font-weight: 500;
+      }
+      .sync {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 7px;
+        padding-top: 1px;
+        font-size: 11.5px;
+        color: var(--t3);
+      }
+      .sync i {
+        width: 5px;
+        height: 5px;
+        border-radius: 50%;
+        background: var(--offline);
+        display: block;
+      }
+      .sync.live i {
+        background: var(--mint);
+      }
+      .sync.busy i {
+        background: var(--amber);
+      }
+      /* Long press: everything except the held button drops back. */
+      .holding .header,
+      .holding .stage,
+      .holding .context,
+      .holding .sync {
+        opacity: 0.55;
+        transition: opacity 0.18s ease-out;
+      }
+      .holding .dock button:not(.arming) {
+        opacity: 0.4;
+        transition: opacity 0.18s ease-out;
+      }
+
+      /* ---- Pairing ---- */
+      .fields {
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin-top: 30px;
+      }
+      .field {
+        display: flex;
+        align-items: center;
+        gap: 13px;
+        height: 60px;
+        padding: 0 16px;
+        border-radius: 15px;
+        background: var(--soft);
+      }
+      .field svg {
+        flex: none;
+      }
+      .field-body {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 0;
+        flex: 1;
+      }
+      .field-body span {
+        font-size: 11.5px;
+        font-weight: 500;
+        letter-spacing: 0.02em;
+        color: var(--t3);
+      }
+      .field-body input {
+        width: 100%;
+        border: 0;
+        padding: 0;
+        background: transparent;
+        color: var(--t1);
+        font-family: inherit;
+        /* At least 16px: iOS zooms into smaller focused fields and does not zoom back out. */
+        font-size: 16px;
+        font-weight: 450;
+        outline: none;
+      }
+      .field-body input.mono {
+        font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      }
+      .field-body input::placeholder {
+        color: var(--t3);
+      }
+      .tag {
+        flex: none;
+        font-size: 10.5px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        color: var(--t3);
+        padding: 3px 7px;
+        border-radius: 6px;
+        background: var(--press);
+      }
+      .fine {
+        margin: 14px 2px 0;
+        align-self: flex-start;
+        font-size: 12px;
+        line-height: 1.6;
+        color: var(--t3);
+      }
+
+      /* Home indicator strip, so the dock never sits under it. */
+      .home {
+        flex: none;
+        /* The real safe-area inset wins when the phone reports a larger one. */
+        height: max(30px, env(safe-area-inset-bottom));
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .home i {
+        width: 134px;
+        height: 5px;
+        border-radius: 3px;
+        background: var(--home);
+        display: block;
+      }
+      @media (display-mode: standalone) {
+        .home i {
+          display: none;
+        }
+      }
+
+      @media (max-width: 374px) {
+        .core {
+          width: 184px;
+          height: 184px;
+        }
+        .status {
+          font-size: 31px;
+        }
+      }
+      @media (max-height: 780px) {
+        .stage {
+          justify-content: flex-start;
+        }
+        #app {
+          overflow-y: auto;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          animation: none !important;
+          transition: none !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="app.js"></script>
+  </body>
+</html>

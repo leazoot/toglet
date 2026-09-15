@@ -1,0 +1,11 @@
+dist
+node_modules
+src-tauri/target
+src-tauri/gen
+pnpm-lock.yaml
+
+# Local working material, hand-formatted and not part of the published project.
+design
+docs
+spikes
+scripts

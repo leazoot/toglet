@@ -1,0 +1,186 @@
+/* The ring form: same window and hit buffer as the bar; only the height differs
+   (Dock.module.css points `--tg-bar-height` at it). */
+
+.bar {
+  position: relative;
+  flex: none;
+  box-sizing: border-box;
+  width: var(--tg-bar-width);
+  height: var(--tg-ring-form-height);
+  padding: var(--tg-ring-form-padding) 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--tg-ring-form-gap);
+  background: var(--tg-surface-ring-form);
+  box-shadow: var(--tg-shadow-bar);
+  outline: var(--tg-panel-hairline) solid var(--tg-line-bar-outline);
+  outline-offset: calc(-1 * var(--tg-panel-hairline));
+}
+
+.right {
+  border-radius: var(--tg-bar-radius) 0 0 var(--tg-bar-radius);
+}
+
+.left {
+  border-radius: 0 var(--tg-bar-radius) var(--tg-bar-radius) 0;
+}
+
+.rings {
+  position: relative;
+  flex: none;
+  width: var(--tg-ring-form-box);
+  height: var(--tg-ring-form-box);
+  display: grid;
+  place-items: center;
+}
+
+.button {
+  border: 0;
+  padding: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--tg-text-secondary);
+  cursor: pointer;
+  transition: color var(--tg-duration-icon) var(--tg-ease-out);
+}
+
+.button:hover {
+  color: var(--tg-brand);
+}
+
+.svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  /* Both arcs start at twelve o'clock. */
+  transform: rotate(-90deg);
+}
+
+/* Track, arc and tones reuse QuotaRing's so the two shapes cannot drift apart. */
+.track {
+  composes: track from "../../components/QuotaRing.module.css";
+}
+
+.trackUnread {
+  composes: trackUnread from "../../components/QuotaRing.module.css";
+}
+
+/* Square caps: on a ring this small round caps close a 2% gap, so 98% drew as a full circle. */
+.arc {
+  composes: arc from "../../components/QuotaRing.module.css";
+  stroke-linecap: butt;
+}
+
+.healthy {
+  composes: healthy from "../../components/QuotaRing.module.css";
+}
+
+.healthyInner {
+  stroke: var(--tg-quota-healthy-weekly);
+}
+
+.warn {
+  composes: warn from "../../components/QuotaRing.module.css";
+}
+
+.low {
+  composes: low from "../../components/QuotaRing.module.css";
+}
+
+.empty {
+  composes: empty from "../../components/QuotaRing.module.css";
+}
+
+.unreadable {
+  composes: unreadable from "../../components/QuotaRing.module.css";
+}
+
+/* Identity colour only on the initial, never as a fill. */
+.initial {
+  position: relative;
+  font-size: var(--tg-text-ring-form-initial-size);
+  font-weight: var(--tg-text-tag-weight);
+  color: var(--tg-bar-accent, var(--tg-text-secondary));
+}
+
+.initial[data-accent="1"] {
+  --tg-bar-accent: var(--tg-accent-1);
+}
+
+.initial[data-accent="2"] {
+  --tg-bar-accent: var(--tg-accent-2);
+}
+
+.initial[data-accent="3"] {
+  --tg-bar-accent: var(--tg-accent-3);
+}
+
+.initial[data-accent="4"] {
+  --tg-bar-accent: var(--tg-accent-4);
+}
+
+.initial[data-accent="5"] {
+  --tg-bar-accent: var(--tg-accent-5);
+}
+
+.icon {
+  position: relative;
+  width: var(--tg-bar-add-icon-size);
+  height: var(--tg-bar-add-icon-size);
+}
+
+/* The amber dot, ringed in the base surface so it reads as a badge. */
+.notice {
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: var(--tg-bar-badge-size);
+  height: var(--tg-bar-badge-size);
+  border-radius: 50%;
+  background: var(--tg-quota-warn);
+  box-shadow: 0 0 0 var(--tg-bar-badge-outline) var(--tg-surface-base);
+}
+
+/* Never wrapped, and small enough that `100% 100%` fits in the form's width. */
+.row {
+  display: flex;
+  align-items: baseline;
+  white-space: nowrap;
+  gap: var(--tg-ring-form-row-gap);
+  height: var(--tg-ring-form-line-height);
+  line-height: var(--tg-ring-form-line-height);
+}
+
+.value {
+  font-size: var(--tg-text-ring-form-value-size);
+  font-weight: var(--tg-text-percent-weight);
+  letter-spacing: var(--tg-text-ring-form-value-tracking);
+  font-variant-numeric: tabular-nums;
+}
+
+.value-healthy {
+  color: var(--tg-quota-healthy);
+}
+
+.value-healthyInner {
+  color: var(--tg-quota-healthy-weekly);
+}
+
+.value-warn {
+  color: var(--tg-quota-warn);
+}
+
+.value-low {
+  color: var(--tg-quota-low);
+}
+
+.value-empty {
+  color: var(--tg-quota-empty);
+}
+
+.value-unreadable {
+  color: var(--tg-text-secondary);
+}

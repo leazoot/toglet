@@ -1,0 +1,284 @@
+.section {
+  padding: var(--tg-settings-body-padding);
+}
+
+/* A grey line of explanation, e.g. why the controls are locked. */
+.hint {
+  margin: 4px 0 6px;
+  font-size: var(--tg-text-email-size);
+  font-weight: var(--tg-text-body-weight);
+  line-height: 1.45;
+  color: var(--tg-text-secondary);
+}
+
+/* A heading on its own row, above a list rather than beside a control. */
+.heading {
+  margin: 6px 0 0;
+  min-height: var(--tg-settings-row-height);
+  display: flex;
+  align-items: center;
+}
+
+.session {
+  flex: 1;
+  min-width: 0;
+  height: var(--tg-button-height);
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--tg-button-radius);
+  background: var(--tg-surface-button);
+  color: var(--tg-button-secondary-text);
+  font-size: var(--tg-text-button-size);
+  font-weight: var(--tg-text-body-weight);
+  text-align: left;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  transition: background var(--tg-duration-icon) var(--tg-ease-out);
+}
+
+.session:hover:not(:disabled) {
+  background: var(--tg-surface-button-hover);
+}
+
+.session:disabled {
+  cursor: default;
+}
+
+.unchosen {
+  color: var(--tg-text-secondary);
+}
+
+/* The chooser, mirroring the desktop app's sidebar: folder headings, sessions indented under
+   them. It may run to eight rows before it scrolls. */
+.threads {
+  margin: 0 0 4px;
+  padding: 0;
+  max-height: calc(8 * var(--tg-settings-row-height));
+  overflow-y: auto;
+}
+
+.group + .group {
+  margin-top: 8px;
+}
+
+.groupTitle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  min-height: var(--tg-settings-row-height);
+  padding: 0 8px;
+  font-size: var(--tg-text-setting-label-size);
+  font-weight: var(--tg-text-account-weight);
+  color: var(--tg-text-primary);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.folder {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  color: var(--tg-text-label);
+}
+
+/* Indented to the heading's text, past its mark. */
+.thread {
+  display: flex;
+  align-items: center;
+  gap: var(--tg-row-gap);
+  width: 100%;
+  min-height: var(--tg-settings-row-height);
+  padding: 0 8px 0 28px;
+  border: 0;
+  border-radius: var(--tg-button-radius);
+  background: transparent;
+  color: var(--tg-text-primary);
+  font-size: var(--tg-text-setting-label-size);
+  font-weight: var(--tg-text-body-weight);
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--tg-duration-icon) var(--tg-ease-out);
+}
+
+.thread:hover {
+  background: var(--tg-surface-row-hover);
+}
+
+.thread[aria-selected="true"] {
+  background: var(--tg-surface-button);
+}
+
+.threadTitle {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.threadAge {
+  flex: none;
+  font-size: var(--tg-text-tag-size);
+  color: var(--tg-text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+.participants {
+  list-style: none;
+  margin: 0 0 4px;
+  padding: 0;
+}
+
+.participant {
+  display: flex;
+  align-items: center;
+  gap: var(--tg-row-inner-gap);
+  min-height: var(--tg-settings-row-height);
+}
+
+.tick {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  margin: 0 4px 0 0;
+  accent-color: var(--tg-brand);
+  cursor: pointer;
+}
+
+.tick:disabled {
+  cursor: default;
+}
+
+.name {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--tg-text-setting-label-size);
+  font-weight: var(--tg-text-body-weight);
+  color: var(--tg-text-primary);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.excluded {
+  color: var(--tg-text-secondary);
+}
+
+.iconButton {
+  width: var(--tg-icon-button-size);
+  height: var(--tg-icon-button-size);
+  flex: none;
+  display: grid;
+  place-items: center;
+  border: 0;
+  padding: 0;
+  border-radius: var(--tg-icon-button-radius);
+  background: transparent;
+  color: var(--tg-icon-stroke);
+  opacity: var(--tg-icon-button-idle-opacity);
+  cursor: pointer;
+  transition:
+    opacity var(--tg-duration-icon) var(--tg-ease-out),
+    background var(--tg-duration-icon) var(--tg-ease-out);
+}
+
+.iconButton:hover:not(:disabled) {
+  opacity: 1;
+  background: var(--tg-surface-icon-hover);
+}
+
+.iconButton:disabled {
+  cursor: default;
+  opacity: 0.3;
+}
+
+.icon {
+  width: 15px;
+  height: 15px;
+}
+
+/* Which Codex version made the list. */
+.version {
+  margin: 2px 0 4px;
+  text-align: right;
+  font-size: var(--tg-text-tag-size);
+  color: var(--tg-text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The fold: "More options", its summary and a chevron, on one row. */
+.more {
+  display: flex;
+  align-items: center;
+  gap: var(--tg-quota-gap);
+  width: 100%;
+  min-height: var(--tg-settings-row-height);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--tg-text-primary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.moreLabel {
+  flex: none;
+  font-size: var(--tg-text-setting-label-size);
+  font-weight: var(--tg-text-account-weight);
+}
+
+.moreSummary {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  text-align: right;
+  font-size: var(--tg-text-email-size);
+  color: var(--tg-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.instruction {
+  display: block;
+  width: 100%;
+  margin: 2px 0 0;
+  padding: 7px 9px;
+  border: 0;
+  border-radius: var(--tg-button-radius);
+  background: var(--tg-surface-segment-well);
+  box-shadow: inset 0 0 0 var(--tg-panel-hairline) var(--tg-line-inset);
+  color: var(--tg-text-primary);
+  font: inherit;
+  font-size: var(--tg-text-button-size);
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.instruction:disabled {
+  color: var(--tg-text-secondary);
+}
+
+.counter {
+  margin: 3px 0 4px;
+  text-align: right;
+  font-size: var(--tg-text-tag-size);
+  color: var(--tg-text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+.over {
+  color: var(--tg-quota-low);
+}
+
+.alert {
+  margin: 4px 0 6px;
+  font-size: var(--tg-text-email-size);
+  line-height: 1.45;
+  color: var(--tg-quota-low);
+}

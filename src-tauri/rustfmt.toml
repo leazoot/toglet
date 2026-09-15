@@ -1,0 +1,4 @@
+# Stable options only. Unix newlines stop Windows and macOS checkouts rewriting each other's files.
+edition = "2024"
+max_width = 100
+newline_style = "Unix"

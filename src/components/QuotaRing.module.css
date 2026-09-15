@@ -1,0 +1,85 @@
+/* The ø38 quota ring. Every value comes from src/styles/tokens.css. */
+
+.group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+}
+
+.ring {
+  position: relative;
+  width: var(--tg-ring-size);
+  height: var(--tg-ring-size);
+  display: grid;
+  place-items: center;
+}
+
+.svg {
+  position: absolute;
+  inset: 0;
+  /* The arc starts at twelve o'clock (−90°). */
+  transform: rotate(-90deg);
+}
+
+.track,
+.trackUnread {
+  fill: none;
+  stroke: var(--tg-line-track);
+}
+
+/* A reading that does not exist. The dashes are what say "unknown"; without them an arc of
+   length zero would be indistinguishable from a quota that has run out. */
+.trackUnread {
+  fill: none;
+  stroke: var(--tg-quota-unreadable);
+  stroke-dasharray: var(--tg-ring-track-dash);
+}
+
+.arc {
+  fill: none;
+  stroke-linecap: round;
+  /* One move to the new value, no loop. */
+  transition:
+    stroke-dasharray var(--tg-duration-quota) var(--tg-ease-standard),
+    stroke var(--tg-duration-quota) var(--tg-ease-standard);
+}
+
+.healthy {
+  stroke: var(--tg-quota-healthy);
+}
+
+.warn {
+  stroke: var(--tg-quota-warn);
+}
+
+.low {
+  stroke: var(--tg-quota-low);
+}
+
+.empty {
+  stroke: var(--tg-quota-empty);
+}
+
+/* Nothing is drawn - the dashed track is the whole statement. */
+.unreadable {
+  stroke: transparent;
+}
+
+.label {
+  font-size: var(--tg-text-ring-label-size);
+  font-weight: var(--tg-text-ring-label-weight);
+  letter-spacing: var(--tg-text-ring-label-tracking);
+  color: var(--tg-text-secondary);
+}
+
+.percent {
+  min-width: var(--tg-quota-percent-width);
+  text-align: center;
+  font-size: var(--tg-text-percent-size);
+  font-weight: var(--tg-text-percent-weight);
+  letter-spacing: var(--tg-text-percent-tracking);
+  color: var(--tg-text-primary);
+  font-variant-numeric: tabular-nums;
+}

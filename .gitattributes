@@ -1,0 +1,7 @@
+# One line ending everywhere: the project is built on Windows and macOS.
+* text=auto eol=lf
+
+*.png binary
+*.ico binary
+*.icns binary
+pnpm-lock.yaml linguist-generated=true

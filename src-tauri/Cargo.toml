@@ -1,0 +1,80 @@
+[package]
+name = "toglet"
+version = "0.0.1"
+description = "Codex account quota display and manual account switching"
+edition = "2024"
+rust-version = "1.85.0"
+license = "MIT"
+publish = false
+# `tauri dev` runs a bare `cargo run`, which is ambiguous next to the `dev_harness` binary.
+default-run = "toglet"
+
+[lib]
+# App logic lives in a library so integration tests can drive modules without a window.
+name = "toglet_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+# `macos-private-api` enables real window transparency on macOS; it rules out the Mac App Store.
+tauri = { version = "2", features = ["tray-icon", "macos-private-api"] }
+thiserror = "2"
+# JSON-RPC frames over stdio; ignoring unknown fields keeps the wire layer forward compatible.
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# Irreversible account fingerprints; already in the dependency graph through Tauri.
+sha2 = "0.10"
+tauri-plugin-notification = "2"
+# Outbound notifications and bridge polling; native-tls uses the platform TLS stack.
+reqwest = { version = "0.13.5", default-features = false, features = [
+  "json",
+  "native-tls",
+  "http2",
+  "charset",
+  "system-proxy",
+] }
+# The e-mail notification channel; shares native-tls with reqwest.
+lettre = { version = "0.11.23", default-features = false, features = [
+  "smtp-transport",
+  "builder",
+  "tokio1-native-tls",
+] }
+
+[target.'cfg(windows)'.dependencies]
+# Win32 bindings for user-only DACLs, DPAPI, process probing and other platform calls.
+windows-sys = { version = "0.61", features = [
+  "Wdk_System_SystemServices",
+  "Win32_Foundation",
+  "Win32_Security",
+  "Win32_Security_Authorization",
+  "Win32_Security_Cryptography",
+  "Win32_Storage_FileSystem",
+  # Process enumeration for the client probe, without elevation.
+  "Win32_System_Diagnostics_ToolHelp",
+  # `SetThreadExecutionState` prevents idle sleep while continuation waits; unverified on Windows.
+  "Win32_System_Power",
+  "Win32_System_SystemInformation",
+  "Win32_System_Threading",
+  # `WM_CLOSE` asks a window to close; there is no force-kill.
+  "Win32_UI_WindowsAndMessaging",
+  # `ShellExecuteW` opens the sign-in URL in the browser without a shell or command line.
+  "Win32_UI_Shell",
+] }
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true
+
+[features]
+# Builds the development-only `dev_harness` binary; never enabled for release builds.
+dev-harness = []
+
+[[bin]]
+name = "dev_harness"
+path = "src/bin/dev_harness.rs"
+required-features = ["dev-harness"]

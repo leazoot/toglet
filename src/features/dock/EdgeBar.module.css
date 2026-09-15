@@ -1,0 +1,145 @@
+/* The collapsed bar. The window also includes a transparent inward hit buffer, because a
+   pointer only reaches what a window occupies. */
+
+.bar {
+  position: relative;
+  flex: none;
+  width: var(--tg-bar-width);
+  height: var(--tg-bar-height);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--tg-bar-gap);
+  background: var(--tg-surface-base);
+  box-shadow: var(--tg-shadow-bar);
+  /* Drawn inside so it cannot round differently from the background at 125%. */
+  outline: var(--tg-panel-hairline) solid var(--tg-line-bar-outline);
+  outline-offset: calc(-1 * var(--tg-panel-hairline));
+}
+
+.right {
+  border-radius: var(--tg-bar-radius) 0 0 var(--tg-bar-radius);
+}
+
+.left {
+  border-radius: 0 var(--tg-bar-radius) var(--tg-bar-radius) 0;
+}
+
+.avatar {
+  position: relative;
+  width: var(--tg-bar-avatar-size);
+  height: var(--tg-bar-avatar-size);
+  flex: none;
+  border-radius: 50%;
+  background: var(--tg-surface-avatar-well);
+  box-shadow: inset 0 0 0 var(--tg-panel-hairline) var(--tg-bar-accent-ring, var(--tg-line-outline));
+  display: grid;
+  place-items: center;
+}
+
+.avatar[data-empty="true"] {
+  background: transparent;
+  box-shadow: none;
+  outline: var(--tg-panel-hairline) dashed var(--tg-line-track);
+  outline-offset: calc(-1 * var(--tg-panel-hairline));
+}
+
+.initial {
+  font-size: var(--tg-text-bar-initial-size);
+  font-weight: var(--tg-text-tag-weight);
+  color: var(--tg-bar-accent, var(--tg-text-secondary));
+}
+
+/* Identity colours: only the hairline ring and the initial, never a fill. */
+.avatar[data-accent="1"] {
+  --tg-bar-accent: var(--tg-accent-1);
+  --tg-bar-accent-ring: var(--tg-accent-1-ring);
+}
+
+.avatar[data-accent="2"] {
+  --tg-bar-accent: var(--tg-accent-2);
+  --tg-bar-accent-ring: var(--tg-accent-2-ring);
+}
+
+.avatar[data-accent="3"] {
+  --tg-bar-accent: var(--tg-accent-3);
+  --tg-bar-accent-ring: var(--tg-accent-3-ring);
+}
+
+.avatar[data-accent="4"] {
+  --tg-bar-accent: var(--tg-accent-4);
+  --tg-bar-accent-ring: var(--tg-accent-4-ring);
+}
+
+.avatar[data-accent="5"] {
+  --tg-bar-accent: var(--tg-accent-5);
+  --tg-bar-accent-ring: var(--tg-accent-5-ring);
+}
+
+/* The amber dot, ringed in the bar's surface so it reads as a badge. */
+.notice {
+  position: absolute;
+  right: calc(-1 * var(--tg-bar-badge-outline));
+  top: calc(-1 * var(--tg-bar-badge-outline));
+  width: var(--tg-bar-badge-size);
+  height: var(--tg-bar-badge-size);
+  border-radius: 50%;
+  background: var(--tg-quota-warn);
+  box-shadow: 0 0 0 var(--tg-bar-badge-outline) var(--tg-surface-base);
+}
+
+.add {
+  position: relative;
+  width: var(--tg-ring-size);
+  height: var(--tg-ring-size);
+  flex: none;
+  display: grid;
+  place-items: center;
+  border: 0;
+  padding: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--tg-text-secondary);
+  cursor: pointer;
+  transition:
+    color var(--tg-duration-icon) var(--tg-ease-out),
+    background-color var(--tg-duration-icon) var(--tg-ease-out);
+}
+
+.add:hover {
+  color: var(--tg-brand);
+  background: var(--tg-surface-icon-hover);
+}
+
+.addRing {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* Matches QuotaRing `.trackUnread`. */
+.addTrack {
+  fill: none;
+  stroke: var(--tg-quota-unreadable);
+  stroke-dasharray: var(--tg-ring-track-dash);
+}
+
+.addIcon {
+  position: relative;
+  width: var(--tg-bar-add-icon-size);
+  height: var(--tg-bar-add-icon-size);
+}
+
+/* Visually hidden; reaches assistive technology and the tooltip. */
+.hidden {
+  position: absolute;
+  width: var(--tg-panel-hairline);
+  height: var(--tg-panel-hairline);
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

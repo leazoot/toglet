@@ -1,0 +1,5 @@
+# Pinned exactly so rustfmt and clippy behave identically on Windows, macOS and CI.
+[toolchain]
+channel = "1.94.0"
+components = ["rustfmt", "clippy"]
+profile = "minimal"

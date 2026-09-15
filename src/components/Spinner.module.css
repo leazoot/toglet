@@ -1,0 +1,25 @@
+/* The 15px brand-arc spinner. Turns at the "switching right now" rate. */
+
+@keyframes tg-spinner-turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.spinner {
+  width: var(--tg-spinner-size);
+  height: var(--tg-spinner-size);
+  flex: none;
+  animation: tg-spinner-turn var(--tg-duration-switch-spin) linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation: none;
+  }
+}
+
+/* The "reduce motion" setting: the arc stands still, like every other motion the setting stops. */
+:root[data-motion="reduced"] .spinner {
+  animation: none;
+}

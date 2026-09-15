@@ -1,0 +1,235 @@
+/* Extra bottom padding: this is the last thing in the sheet, so it keeps Save off the edge. */
+.page {
+  composes: accounts from "../settings/SettingsSheet.module.css";
+  padding-bottom: 14px;
+}
+
+.hint {
+  margin: 4px 0 6px;
+  font-size: var(--tg-text-email-size);
+  font-weight: var(--tg-text-body-weight);
+  line-height: 1.45;
+  color: var(--tg-text-secondary);
+}
+
+.alert {
+  margin: 4px 0 6px;
+  font-size: var(--tg-text-email-size);
+  line-height: 1.45;
+  color: var(--tg-quota-low);
+}
+
+/* Scrolls after three channels. */
+.list {
+  list-style: none;
+  margin: 0 0 6px;
+  padding: 0;
+  max-height: calc(3 * var(--tg-notify-row-height));
+  overflow-y: auto;
+}
+
+.row {
+  padding: 6px 0;
+}
+
+.row + .row {
+  border-top: var(--tg-panel-hairline) solid var(--tg-line-divider);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--tg-row-gap);
+  min-height: var(--tg-settings-row-height);
+}
+
+.name {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: var(--tg-text-setting-label-size);
+  font-weight: var(--tg-text-account-weight);
+  color: var(--tg-text-primary);
+}
+
+.meta {
+  margin: 0;
+  font-size: var(--tg-text-email-size);
+  font-weight: var(--tg-text-body-weight);
+  line-height: 1.5;
+  color: var(--tg-text-secondary);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* Tint only; the text itself states the failure. */
+.bad {
+  color: var(--tg-quota-low);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 3px;
+}
+
+.action {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--tg-text-secondary);
+  font: inherit;
+  font-size: var(--tg-text-button-size);
+  cursor: pointer;
+  transition: color var(--tg-duration-icon) var(--tg-ease-out);
+}
+
+.action:hover:not(:disabled) {
+  color: var(--tg-text-primary);
+}
+
+.action:disabled {
+  color: var(--tg-text-tertiary);
+  cursor: default;
+}
+
+.primary {
+  margin-left: auto;
+  color: var(--tg-brand);
+  font-weight: var(--tg-text-tag-weight);
+}
+
+.primary:hover:not(:disabled) {
+  color: var(--tg-brand);
+}
+
+/* Per-channel actions as small wells; the test action carries the brand colour and removal sits
+   at the far end. */
+.rowActions {
+  composes: actions;
+  gap: 6px;
+  margin-top: 7px;
+}
+
+.chip {
+  composes: action;
+  display: inline-flex;
+  align-items: center;
+  height: var(--tg-notify-chip-height);
+  padding: 0 10px;
+  border-radius: var(--tg-button-radius);
+  background: var(--tg-surface-button);
+}
+
+.chip:hover:not(:disabled) {
+  background: var(--tg-surface-button-hover);
+}
+
+.chip:disabled {
+  background: var(--tg-surface-button);
+}
+
+.chipPrimary {
+  composes: chip;
+  color: var(--tg-brand);
+  font-weight: var(--tg-text-tag-weight);
+}
+
+.chipPrimary:hover:not(:disabled) {
+  color: var(--tg-brand);
+}
+
+/* Destructive, so it sits apart from the others. */
+.chipRemove {
+  composes: chip;
+  margin-left: auto;
+}
+
+.add {
+  composes: action;
+  margin-top: 2px;
+  color: var(--tg-brand);
+  font-weight: var(--tg-text-tag-weight);
+}
+
+.form {
+  margin-top: 4px;
+  padding-top: 6px;
+  border-top: var(--tg-panel-hairline) solid var(--tg-line-divider);
+}
+
+/* Extra space above the form's closing actions. */
+.form .actions {
+  margin-top: 12px;
+}
+
+.field {
+  display: block;
+  margin-top: 6px;
+}
+
+.fieldLabel {
+  display: block;
+  margin-bottom: 3px;
+  font-size: var(--tg-text-email-size);
+  font-weight: var(--tg-text-body-weight);
+  color: var(--tg-text-label);
+}
+
+.input {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 9px;
+  border: 0;
+  border-radius: var(--tg-button-radius);
+  background: var(--tg-surface-segment-well);
+  box-shadow: inset 0 0 0 var(--tg-panel-hairline) var(--tg-line-inset);
+  color: var(--tg-text-primary);
+  font: inherit;
+  font-size: var(--tg-text-button-size);
+  line-height: 1.6;
+}
+
+.input:disabled {
+  color: var(--tg-text-secondary);
+}
+
+.input::placeholder {
+  color: var(--tg-text-tertiary);
+}
+
+/* The settings row that opens a sub-page; also used by the remote row. */
+.entry {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: var(--tg-button-height);
+  padding: 0 6px 0 10px;
+  border: 0;
+  border-radius: var(--tg-button-radius);
+  background: var(--tg-surface-button);
+  color: var(--tg-button-secondary-text);
+  font-size: var(--tg-text-button-size);
+  font-weight: var(--tg-text-body-weight);
+  cursor: pointer;
+  transition: background var(--tg-duration-icon) var(--tg-ease-out);
+}
+
+.entry:hover {
+  background: var(--tg-surface-button-hover);
+}
+
+.entryEmpty {
+  color: var(--tg-text-secondary);
+}
+
+.chevron {
+  width: 12px;
+  height: 12px;
+  flex: none;
+}

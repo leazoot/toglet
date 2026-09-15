@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192">
+  <!-- The collapsed bar's ring. A fixed arc: this app never sees a quota figure, so the arc is
+       decoration and must not look like data that changes. -->
+  <rect width="192" height="192" rx="42" fill="#080A0C"/>
+  <circle cx="96" cy="96" r="46" fill="none" stroke="#1E2326" stroke-width="11"/>
+  <circle cx="96" cy="96" r="46" fill="none" stroke="#4BE7A5" stroke-width="11"
+          stroke-linecap="round" stroke-dasharray="196 289" transform="rotate(-90 96 96)"/>
+</svg>

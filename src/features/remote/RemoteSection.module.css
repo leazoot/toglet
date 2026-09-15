@@ -1,0 +1,122 @@
+.page {
+  composes: page from "../notify/NotifySection.module.css";
+}
+
+.hint {
+  composes: hint from "../notify/NotifySection.module.css";
+}
+
+.alert {
+  composes: alert from "../notify/NotifySection.module.css";
+}
+
+.field {
+  composes: field from "../notify/NotifySection.module.css";
+}
+
+.fieldLabel {
+  composes: fieldLabel from "../notify/NotifySection.module.css";
+}
+
+.input {
+  composes: input from "../notify/NotifySection.module.css";
+}
+
+.actions {
+  composes: actions from "../notify/NotifySection.module.css";
+}
+
+.action {
+  composes: action from "../notify/NotifySection.module.css";
+}
+
+.primary {
+  composes: action from "../notify/NotifySection.module.css";
+  composes: primary from "../notify/NotifySection.module.css";
+}
+
+.connection {
+  margin: 2px 0 4px;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: var(--tg-settings-row-height);
+}
+
+/* Never the only state indicator; the row also states it in words. */
+.dot {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--tg-text-tertiary);
+}
+
+.dotLive {
+  background: var(--tg-brand);
+}
+
+.host {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: var(--tg-text-setting-label-size);
+  font-weight: var(--tg-text-account-weight);
+  color: var(--tg-text-primary);
+}
+
+.state {
+  margin-left: auto;
+  flex: none;
+  font-size: var(--tg-text-email-size);
+  color: var(--tg-text-secondary);
+}
+
+.meta {
+  composes: meta from "../notify/NotifySection.module.css";
+  margin-top: 1px;
+}
+
+/* A one-line footnote: never wraps. */
+.limit {
+  margin: 10px 0 0;
+  padding-top: 8px;
+  border-top: var(--tg-panel-hairline) solid var(--tg-line-divider);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: var(--tg-text-footer-size);
+  color: var(--tg-text-tertiary);
+}
+
+/* Generate / Copy beside the secret's label. */
+.fieldHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.fieldTools {
+  display: inline-flex;
+  gap: 8px;
+}
+
+.tool {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--tg-brand);
+  font: inherit;
+  font-size: var(--tg-text-email-size);
+  font-weight: var(--tg-text-tag-weight);
+  cursor: pointer;
+}
+
+.tool:hover {
+  text-decoration: underline;
+}

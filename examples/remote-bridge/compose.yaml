@@ -1,0 +1,54 @@
+# The whole deployment. NOT PART OF TOGLET - see ../README.md.
+#
+#   ./up.sh                  # writes .env (DOMAIN, PREFIX) and starts the stack
+#   docker compose up -d     # once .env exists
+#
+# Touches nothing else on the host: no apt repository, no systemd unit, no file under /etc.
+
+services:
+  bridge:
+    image: node:22-alpine
+    restart: unless-stopped
+    init: true
+    command: ["node", "/app/bridge.mjs"]
+    environment:
+      # All interfaces inside the container; the host only sees the loopback port below.
+      HOST: "0.0.0.0"
+      PORT: "8787"
+    volumes:
+      - ./bridge.mjs:/app/bridge.mjs:ro
+    # Loopback only, for a reverse proxy installed on the host. A containerized proxy cannot reach
+    # it; attach that proxy to this network and use the name `bridge` instead.
+    ports:
+      - "127.0.0.1:${BRIDGE_PORT:-8787}:8787"
+    read_only: true
+    tmpfs:
+      - /tmp
+    mem_limit: 128m
+
+  # Only for a machine with nothing else on 80 and 443. `up.sh` picks the profile;
+  # `docker compose --profile standalone up -d` forces it.
+  caddy:
+    image: caddy:2-alpine
+    profiles: ["standalone"]
+    restart: unless-stopped
+    depends_on:
+      - bridge
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      # Required rather than defaulted, so a missing value fails loudly.
+      DOMAIN: ${DOMAIN:?set DOMAIN in .env}
+      PREFIX: ${PREFIX:?set PREFIX in .env - openssl rand -hex 12}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # The phone page needs https too, to install to the home screen and to use Web Crypto.
+      - ../pwa:/srv/pwa:ro
+      # Certificates. Losing this volume means requesting new ones, which is rate-limited.
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:

@@ -1,0 +1,24 @@
+# The bridge holds a poll open for up to 25 seconds and Toglet gives the request 30. The proxy
+# must not buffer the response or cut the connection early, or commands wait for the full hold.
+
+{$DOMAIN} {
+	# The longer path first: Caddy takes the first block that matches.
+	handle_path /{$PREFIX}/app/* {
+		root * /srv/pwa
+		file_server
+	}
+
+	handle_path /{$PREFIX}/* {
+		reverse_proxy bridge:8787 {
+			# No buffering: the long poll depends on it.
+			flush_interval -1
+			transport http {
+				read_timeout 90s
+				write_timeout 90s
+			}
+		}
+	}
+
+	# Everything else, the bare domain included.
+	respond 404
+}

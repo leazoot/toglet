@@ -1,0 +1,13 @@
+{
+  "name": "Toglet Remote",
+  "short_name": "Toglet",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#080A0C",
+  "theme_color": "#080A0C",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

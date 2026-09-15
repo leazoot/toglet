@@ -1,0 +1,506 @@
+/*
+ * Design tokens: the only place in src/ allowed to hold a literal colour (tokens.test.ts scans
+ * for others). Themes change values, never structure; an explicit theme beats the system one.
+ */
+
+:root {
+  /* ---------------------------------------------------------------- geometry (EdgeBar) */
+  --tg-bar-width: 60px;
+  --tg-bar-height: 168px;
+  /* Panel side only. The screen-edge side stays square so the bar sits flush. */
+  --tg-bar-radius: 16px;
+  /* The bar plus this much inward buffer is the hover target. */
+  --tg-bar-hit-buffer: 8px;
+  /* Extra window height so shadows are not clipped. Mirrors `ROOM_ABOVE` / `ROOM_BELOW` in
+     src-tauri/src/window/geometry.rs. */
+  --tg-window-room-above: 24px;
+  --tg-window-room-below: 58px;
+  --tg-bar-avatar-size: 22px;
+  --tg-bar-gap: 10px;
+  --tg-bar-badge-size: 8px;
+  --tg-bar-badge-outline: 2px;
+  --tg-bar-add-icon-size: 13px;
+  --tg-settings-mark-size: 14px;
+  --tg-autorun-mark-size: 12px;
+  --tg-spinner-size: 15px;
+  --tg-settings-account-row-padding: 3px;
+
+  /* Quota ring. The circumference is unitless because `stroke-dasharray` takes user units. */
+  --tg-ring-size: 38px;
+  --tg-ring-stroke: 3.5px;
+  --tg-ring-radius: 16.5px;
+  --tg-ring-circumference: 103.67;
+  /* Unreadable quota: dashed, never a zeroed solid ring. */
+  --tg-ring-track-dash: 1.8 3.6;
+
+  /* ---------------------------------------------------------------- geometry (ring form) */
+  /* Mirrors `RING_HEIGHT` in src-tauri/src/window/geometry.rs. */
+  --tg-ring-form-height: 72px;
+  /* Radii and circumferences are duplicated for the SVG in components/geometry.ts and
+     features/quotas/format.ts. */
+  --tg-ring-form-box: 40px;
+  --tg-ring-form-stroke: 3px;
+  --tg-ring-form-outer-radius: 16.5px;
+  --tg-ring-form-inner-radius: 11px;
+  --tg-ring-form-outer-circumference: 103.67;
+  --tg-ring-form-inner-circumference: 69.12;
+  --tg-ring-form-padding: 7px;
+  --tg-ring-form-gap: 4px;
+  --tg-ring-form-row-gap: 2px;
+  --tg-ring-form-line-height: 14px;
+
+  /* ---------------------------------------------------------------- geometry (Panel) */
+  /* 348 panel + 9 gap + 60 bar. */
+  --tg-total-width: 417px;
+  --tg-panel-width: 348px;
+  --tg-panel-gap: 9px;
+  --tg-panel-radius: 14px;
+  --tg-panel-hairline: 1px;
+
+  /* 4.5 over the panel's stroke + 9 gap + 0.5 into the bar, so there is no visible seam. */
+  --tg-nub-width: 14px;
+  --tg-nub-height: 28px;
+  --tg-nub-tip-gap: 1px;
+
+  --tg-toolbar-padding: 9px 10px 9px 14px;
+  --tg-brand-mark-size: 17px;
+  --tg-empty-mark-size: 36px;
+  --tg-empty-body-width: 238px;
+  --tg-icon-button-size: 30px;
+  --tg-icon-button-radius: 8px;
+  --tg-icon-button-idle-opacity: 0.72;
+
+  --tg-row-height: 90px;
+  --tg-row-padding: 0 12px 0 13px;
+  --tg-row-gap: 10px;
+  --tg-row-avatar-size: 28px;
+  /* Fixed so the hover arrow cannot reflow the row. */
+  --tg-row-arrow-column: 20px;
+  --tg-plan-tag-radius: 5px;
+
+  --tg-quota-label-width: 18px;
+  --tg-quota-bar-height: 4px;
+  --tg-quota-bar-radius: 2px;
+  --tg-quota-percent-width: 36px;
+  --tg-quota-reset-width: 58px;
+  /* One gap for all four columns of a quota line. */
+  --tg-quota-gap: 8px;
+  --tg-row-inner-gap: 6px;
+
+  --tg-footer-height: 34px;
+  --tg-footer-dot-size: 5px;
+  /* Five rows; beyond that the list scrolls. */
+  --tg-list-max-height: 450px;
+
+  --tg-overlay-padding: 13px;
+  --tg-overlay-radius: 12px;
+  --tg-button-height: 30px;
+  --tg-button-radius: 8px;
+
+  --tg-settings-width: 340px;
+  --tg-settings-radius: 13px;
+  --tg-settings-row-height: 38px;
+  --tg-settings-header-padding: 14px 16px 12px;
+  --tg-settings-body-padding: 6px 16px 8px;
+  --tg-notify-row-height: 116px;
+  --tg-notify-chip-height: 24px;
+  --tg-segmented-radius: 7px;
+  --tg-segmented-item-radius: 5px;
+  --tg-segmented-height: 22px;
+  --tg-segmented-item-padding: 0 11px;
+  --tg-segmented-item-padding-tight: 0 10px;
+
+  --tg-switch-width: 36px;
+  --tg-switch-height: 21px;
+  --tg-switch-knob-size: 17px;
+  --tg-switch-inset: 2px;
+
+  /* ---------------------------------------------------------------- active account */
+  --tg-active-rail-width: 2px;
+  --tg-active-rail-inset: 24px;
+  --tg-active-avatar-ring: 1.5px;
+  --tg-inactive-fill-opacity: 0.82;
+
+  /* ---------------------------------------------------------------- type */
+  /* System stacks only; no web font is bundled. */
+  --tg-font-sans:
+    "Segoe UI Variable Text", "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    system-ui, sans-serif;
+  --tg-font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  /* Tracking in em: `letter-spacing` ignores percentages. */
+  --tg-text-product-size: 15.5px;
+  --tg-text-product-weight: 600;
+  --tg-text-product-tracking: -0.012em;
+
+  --tg-text-account-size: 14.5px;
+  --tg-text-account-weight: 600;
+  --tg-text-account-tracking: -0.012em;
+
+  --tg-text-percent-size: 13.5px;
+  --tg-text-percent-weight: 600;
+  --tg-text-percent-tracking: -0.01em;
+
+  --tg-text-heading-size: 14px;
+  --tg-text-heading-tracking: -0.01em;
+
+  --tg-text-email-size: 12px;
+  --tg-text-reset-size: 12px;
+  --tg-text-body-weight: 400;
+
+  --tg-text-tag-size: 11px;
+  --tg-text-tag-weight: 600;
+  --tg-text-tag-tracking: 0.02em;
+  --tg-text-chip-tracking: 0.01em;
+
+  --tg-text-ring-label-size: 11px;
+  --tg-text-ring-label-weight: 600;
+  --tg-text-ring-label-tracking: 0.04em;
+  --tg-text-quota-label-tracking: 0.03em;
+
+  --tg-text-footer-size: 11.5px;
+  --tg-text-count-size: 11.5px;
+  --tg-text-button-size: 12px;
+  --tg-text-setting-label-size: 12.5px;
+  --tg-text-sheet-title-size: 13.5px;
+
+  --tg-text-bar-initial-size: 10.5px;
+  --tg-text-row-initial-size: 12px;
+  --tg-text-ring-form-initial-size: 11px;
+  /* Below the 11px floor so the worst case `100% 100%` fits in 60px; the full sentence is in the
+     tooltip and accessible label. */
+  --tg-text-ring-form-value-size: 9px;
+  --tg-text-ring-form-value-tracking: -0.02em;
+
+  /* ---------------------------------------------------------------- motion */
+  --tg-hover-intent-delay: 120ms;
+  --tg-collapse-delay: 260ms;
+  --tg-duration-expand: 190ms;
+  --tg-duration-collapse: 160ms;
+  --tg-duration-row-hover: 160ms;
+  --tg-duration-row-arrow: 180ms;
+  --tg-duration-quota: 200ms;
+  --tg-duration-active-move: 200ms;
+  --tg-duration-snap: 180ms;
+  --tg-duration-overlay: 180ms;
+  --tg-duration-icon: 160ms;
+  /* Background refresh spins slower than an active switch. */
+  --tg-duration-refresh-spin: 1.8s;
+  --tg-duration-switch-spin: 1.1s;
+  --tg-duration-scan: 1.5s;
+  /* Two pulses, then it stops; never a permanent blink. */
+  --tg-duration-low-quota-pulse: 1.6s;
+  --tg-low-quota-pulse-count: 2;
+  --tg-low-quota-pulse-opacity: 0.62;
+
+  --tg-ease-standard: cubic-bezier(0.32, 0.72, 0, 1);
+  --tg-ease-out: ease-out;
+  --tg-ease-in-out: ease-in-out;
+
+  /* Direction of the screen interior from the bar: -1 docked right, +1 docked left. Set by the
+     dock per edge; the default matches the default edge. */
+  --tg-inward-sign: -1;
+
+  --tg-row-hover-shift: 2px;
+  --tg-row-arrow-shift: 4px;
+  --tg-panel-enter-shift: 6px;
+  /* The panel shrinks slightly towards the bar as it fades out. */
+  --tg-panel-exit-scale: 0.94;
+  --tg-overlay-enter-shift: 3px;
+  --tg-snap-threshold: 40px;
+
+  /* ---------------------------------------------------------------- colour, dark */
+  --tg-brand: #40e6a4;
+  --tg-active-tag-bg: rgba(64, 230, 164, 0.13);
+  --tg-active-tag-text: #40e6a4;
+  --tg-active-row-bg: rgba(64, 230, 164, 0.045);
+
+  --tg-surface-base: #0b0c0d;
+  /* Translucent base, mixed so it follows the theme. */
+  --tg-surface-ring-form: color-mix(in srgb, var(--tg-surface-base) 86%, transparent);
+  --tg-surface-row-hover: #141618;
+  --tg-surface-overlay: #141618;
+  --tg-surface-button: #1b1e20;
+  --tg-surface-button-hover: #232628;
+  --tg-surface-avatar-well: #17191b;
+  --tg-surface-icon-hover: #17191b;
+  /* Dark raises the picked segment by lightening it; light uses a shadow. */
+  --tg-surface-segment-well: #0b0c0d;
+  --tg-surface-segment-picked: #282b2e;
+  --tg-shadow-segment-picked: none;
+
+  --tg-switch-off-bg: #303337;
+  --tg-switch-knob-on: #0b0c0d;
+  --tg-switch-knob-off: #8a8e92;
+
+  --tg-button-primary-bg: #f4f2ed;
+  --tg-button-primary-text: #0b0c0d;
+  --tg-button-secondary-text: #f4f2ed;
+
+  --tg-text-primary: #f4f2ed;
+  --tg-text-secondary: #8a8e92;
+  --tg-text-label: #989b9f;
+  --tg-text-tertiary: #6e7276;
+  --tg-text-count: #7e8286;
+  /* Thin icon strokes need more contrast than text of the same weight. */
+  --tg-icon-stroke: #c9c6c0;
+
+  --tg-line-track: #2a2d30;
+  --tg-line-divider: rgba(255, 255, 255, 0.07);
+  --tg-line-row-divider: rgba(255, 255, 255, 0.05);
+  --tg-line-outline: rgba(255, 255, 255, 0.06);
+  /* Stronger than the panel's: the bar sits directly on the desktop. */
+  --tg-line-bar-outline: rgba(255, 255, 255, 0.075);
+  --tg-line-overlay-outline: rgba(255, 255, 255, 0.08);
+  --tg-line-inset: rgba(255, 255, 255, 0.07);
+  --tg-line-spinner-track: rgba(255, 255, 255, 0.1);
+  /* Inline-action underlines: the text colour at reduced opacity. */
+  --tg-line-underline-primary: rgba(244, 242, 237, 0.3);
+  --tg-line-underline-secondary: rgba(138, 142, 146, 0.35);
+
+  /* The empty-state mark. Opacity differs per theme. */
+  --tg-mark-muted: rgba(244, 242, 237, 0.35);
+  --tg-mark-opacity: 0.8;
+
+  /* Quota status colours express state only. */
+  --tg-quota-healthy: #40e6a4;
+  --tg-quota-warn: #e9c63a;
+  --tg-quota-low: #ff7a45;
+  --tg-quota-empty: #4e5256;
+  --tg-status-mute: #4e5256;
+  /* Follows the track colour in both themes. */
+  --tg-quota-unreadable: var(--tg-line-track);
+  /* The ring form's healthy weekly ring: a second hue so the two rings can be told apart.
+     Warn / low / empty still use the status colours. */
+  --tg-quota-healthy-weekly: #f05a30;
+
+  /* Per-account identity: avatar ring and initial only, never a fill. */
+  --tg-accent-1: #40e6a4;
+  --tg-accent-2: #7fd7c4;
+  --tg-accent-3: #9fbfd8;
+  --tg-accent-4: #d6c89a;
+  --tg-accent-5: #d9a18c;
+  --tg-accent-1-ring: #40e6a466;
+  --tg-accent-2-ring: #7fd7c466;
+  --tg-accent-3-ring: #9fbfd866;
+  --tg-accent-4-ring: #d6c89a66;
+  --tg-accent-5-ring: #d9a18c66;
+
+  /* Kept soft: a heavy black shadow reads as a grey halo over light desktop windows. */
+  --tg-shadow-bar: 0 6px 16px rgba(0, 0, 0, 0.22);
+  --tg-shadow-panel: drop-shadow(0 10px 24px rgba(0, 0, 0, 0.26));
+  --tg-shadow-overlay: 0 10px 24px rgba(0, 0, 0, 0.45);
+  --tg-shadow-settings: 0 14px 32px rgba(30, 26, 20, 0.2);
+  /* Darkens toward the sheet so rows above stay legible. */
+  --tg-scrim: linear-gradient(
+    180deg,
+    rgba(8, 9, 10, 0.34) 0%,
+    rgba(8, 9, 10, 0.72) 46%,
+    rgba(8, 9, 10, 0.86) 100%
+  );
+  --tg-focus-ring: rgba(244, 242, 237, 0.4);
+}
+
+/* ------------------------------------------------------------------ colour, light */
+/* Written twice: the media query follows the system, `[data-theme]` overrides it both ways. */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --tg-brand: #0e8f5e;
+    --tg-active-tag-bg: rgba(14, 143, 94, 0.12);
+    --tg-active-tag-text: #0b7049;
+    --tg-active-row-bg: rgba(14, 143, 94, 0.05);
+
+    --tg-surface-base: #fbfaf8;
+    --tg-surface-row-hover: #f1ede6;
+    --tg-surface-overlay: #ffffff;
+    --tg-surface-button: #edeae4;
+    --tg-surface-button-hover: #e4e0d8;
+    --tg-surface-avatar-well: #f1eee9;
+    --tg-surface-icon-hover: #f1ede6;
+    --tg-surface-segment-well: #f1eee9;
+    --tg-surface-segment-picked: #ffffff;
+    --tg-shadow-segment-picked: 0 1px 2px rgba(60, 52, 40, 0.16);
+
+    --tg-switch-off-bg: #dcd8d2;
+    --tg-switch-knob-on: #ffffff;
+    --tg-switch-knob-off: #fbfaf8;
+
+    --tg-button-primary-bg: #1b1d1e;
+    --tg-button-primary-text: #fbfaf8;
+    --tg-button-secondary-text: #1b1d1e;
+
+    --tg-text-primary: #1b1d1e;
+    --tg-text-secondary: #656a6e;
+    --tg-text-label: #767a7e;
+    --tg-text-tertiary: #8c9095;
+    --tg-text-count: #767a7e;
+    --tg-icon-stroke: #4a4741;
+
+    --tg-line-track: #dad5ce;
+    --tg-quota-healthy-weekly: #c2431c;
+    --tg-line-divider: rgba(0, 0, 0, 0.08);
+    --tg-line-row-divider: rgba(0, 0, 0, 0.055);
+    --tg-line-outline: rgba(0, 0, 0, 0.09);
+    --tg-line-bar-outline: rgba(0, 0, 0, 0.09);
+    --tg-line-overlay-outline: rgba(0, 0, 0, 0.08);
+    --tg-line-inset: rgba(0, 0, 0, 0.07);
+    --tg-line-spinner-track: rgba(0, 0, 0, 0.1);
+    --tg-line-underline-primary: rgba(27, 29, 30, 0.3);
+    --tg-line-underline-secondary: rgba(101, 106, 110, 0.4);
+    --tg-mark-muted: rgba(27, 29, 30, 0.32);
+    --tg-mark-opacity: 0.85;
+
+    --tg-quota-healthy: #0e8f5e;
+    --tg-quota-warn: #96751a;
+    --tg-quota-low: #c05121;
+    --tg-quota-empty: #bdb8b0;
+    --tg-status-mute: #b4afa7;
+
+    --tg-accent-1: #0e8f5e;
+    --tg-accent-2: #2a7f72;
+    --tg-accent-3: #3f6e8c;
+    --tg-accent-4: #8a7433;
+    --tg-accent-5: #a05c42;
+    --tg-accent-1-ring: #0e8f5e59;
+    --tg-accent-2-ring: #2a7f7259;
+    --tg-accent-3-ring: #3f6e8c59;
+    --tg-accent-4-ring: #8a743359;
+    --tg-accent-5-ring: #a05c4259;
+
+    --tg-shadow-bar: 0 6px 16px rgba(60, 52, 40, 0.12);
+    --tg-shadow-panel: drop-shadow(0 10px 22px rgba(60, 52, 40, 0.14));
+    --tg-shadow-overlay: 0 10px 24px rgba(60, 52, 40, 0.2);
+    --tg-shadow-settings: 0 14px 32px rgba(60, 52, 40, 0.16);
+    --tg-scrim: linear-gradient(
+      180deg,
+      rgba(244, 242, 238, 0.42) 0%,
+      rgba(238, 234, 227, 0.8) 46%,
+      rgba(233, 229, 221, 0.9) 100%
+    );
+    --tg-focus-ring: rgba(27, 29, 30, 0.35);
+  }
+}
+
+:root[data-theme="light"] {
+  --tg-brand: #0e8f5e;
+  --tg-active-tag-bg: rgba(14, 143, 94, 0.12);
+  --tg-active-tag-text: #0b7049;
+  --tg-active-row-bg: rgba(14, 143, 94, 0.05);
+
+  --tg-surface-base: #fbfaf8;
+  --tg-surface-row-hover: #f1ede6;
+  --tg-surface-overlay: #ffffff;
+  --tg-surface-button: #edeae4;
+  --tg-surface-button-hover: #e4e0d8;
+  --tg-surface-avatar-well: #f1eee9;
+  --tg-surface-icon-hover: #f1ede6;
+  --tg-surface-segment-well: #f1eee9;
+  --tg-surface-segment-picked: #ffffff;
+  --tg-shadow-segment-picked: 0 1px 2px rgba(60, 52, 40, 0.16);
+
+  --tg-switch-off-bg: #dcd8d2;
+  --tg-switch-knob-on: #ffffff;
+  --tg-switch-knob-off: #fbfaf8;
+
+  --tg-button-primary-bg: #1b1d1e;
+  --tg-button-primary-text: #fbfaf8;
+  --tg-button-secondary-text: #1b1d1e;
+
+  --tg-text-primary: #1b1d1e;
+  --tg-text-secondary: #656a6e;
+  --tg-text-label: #767a7e;
+  --tg-text-tertiary: #8c9095;
+  --tg-text-count: #767a7e;
+  --tg-icon-stroke: #4a4741;
+
+  --tg-line-track: #dad5ce;
+  --tg-quota-healthy-weekly: #c2431c;
+  --tg-line-divider: rgba(0, 0, 0, 0.08);
+  --tg-line-row-divider: rgba(0, 0, 0, 0.055);
+  --tg-line-outline: rgba(0, 0, 0, 0.09);
+  --tg-line-bar-outline: rgba(0, 0, 0, 0.09);
+  --tg-line-overlay-outline: rgba(0, 0, 0, 0.08);
+  --tg-line-inset: rgba(0, 0, 0, 0.07);
+  --tg-line-spinner-track: rgba(0, 0, 0, 0.1);
+  --tg-line-underline-primary: rgba(27, 29, 30, 0.3);
+  --tg-line-underline-secondary: rgba(101, 106, 110, 0.4);
+  --tg-mark-muted: rgba(27, 29, 30, 0.32);
+  --tg-mark-opacity: 0.85;
+
+  --tg-quota-healthy: #0e8f5e;
+  --tg-quota-warn: #96751a;
+  --tg-quota-low: #c05121;
+  --tg-quota-empty: #bdb8b0;
+  --tg-status-mute: #b4afa7;
+
+  --tg-accent-1: #0e8f5e;
+  --tg-accent-2: #2a7f72;
+  --tg-accent-3: #3f6e8c;
+  --tg-accent-4: #8a7433;
+  --tg-accent-5: #a05c42;
+  --tg-accent-1-ring: #0e8f5e59;
+  --tg-accent-2-ring: #2a7f7259;
+  --tg-accent-3-ring: #3f6e8c59;
+  --tg-accent-4-ring: #8a743359;
+  --tg-accent-5-ring: #a05c4259;
+
+  --tg-shadow-bar: 0 6px 16px rgba(60, 52, 40, 0.12);
+  --tg-shadow-panel: drop-shadow(0 10px 22px rgba(60, 52, 40, 0.14));
+  --tg-shadow-overlay: 0 10px 24px rgba(60, 52, 40, 0.2);
+  --tg-shadow-settings: 0 14px 32px rgba(60, 52, 40, 0.16);
+  --tg-scrim: linear-gradient(
+    180deg,
+    rgba(244, 242, 238, 0.42) 0%,
+    rgba(238, 234, 227, 0.8) 46%,
+    rgba(233, 229, 221, 0.9) 100%
+  );
+  --tg-focus-ring: rgba(27, 29, 30, 0.35);
+}
+
+/*
+ * Reduced motion makes changes instant. The setting can only add to the system preference, so
+ * turning it off removes the attribute.
+ */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --tg-hover-intent-delay: 0ms;
+    --tg-collapse-delay: 0ms;
+    --tg-duration-expand: 0ms;
+    --tg-duration-collapse: 0ms;
+    --tg-duration-row-hover: 0ms;
+    --tg-duration-row-arrow: 0ms;
+    --tg-duration-quota: 0ms;
+    --tg-duration-active-move: 0ms;
+    --tg-duration-snap: 0ms;
+    --tg-duration-overlay: 0ms;
+    --tg-duration-icon: 0ms;
+    --tg-duration-low-quota-pulse: 0ms;
+    --tg-low-quota-pulse-count: 0;
+    --tg-row-hover-shift: 0px;
+    --tg-row-arrow-shift: 0px;
+    --tg-panel-enter-shift: 0px;
+    --tg-panel-exit-scale: 1;
+    --tg-overlay-enter-shift: 0px;
+  }
+}
+
+:root[data-motion="reduced"] {
+  --tg-hover-intent-delay: 0ms;
+  --tg-collapse-delay: 0ms;
+  --tg-duration-expand: 0ms;
+  --tg-duration-collapse: 0ms;
+  --tg-duration-row-hover: 0ms;
+  --tg-duration-row-arrow: 0ms;
+  --tg-duration-quota: 0ms;
+  --tg-duration-active-move: 0ms;
+  --tg-duration-snap: 0ms;
+  --tg-duration-overlay: 0ms;
+  --tg-duration-icon: 0ms;
+  --tg-duration-low-quota-pulse: 0ms;
+  --tg-low-quota-pulse-count: 0;
+  --tg-row-hover-shift: 0px;
+  --tg-row-arrow-shift: 0px;
+  --tg-panel-enter-shift: 0px;
+  --tg-panel-exit-scale: 1;
+  --tg-overlay-enter-shift: 0px;
+}

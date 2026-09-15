@@ -1,0 +1,45 @@
+.line {
+  composes: footer from "./Panel.module.css";
+  padding-right: 6px;
+}
+
+.dot {
+  composes: dot from "./Panel.module.css";
+}
+
+.ok {
+  composes: ok from "./Panel.module.css";
+}
+
+.warn {
+  composes: warn from "./Panel.module.css";
+}
+
+.bad {
+  composes: bad from "./Panel.module.css";
+}
+
+.mute {
+  composes: mute from "./Panel.module.css";
+}
+
+.status {
+  composes: status from "./Panel.module.css";
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.iconButton {
+  composes: iconButton from "./Panel.module.css";
+}
+
+.icon {
+  composes: icon from "./Panel.module.css";
+}
+
+.alert {
+  color: var(--tg-quota-low);
+}

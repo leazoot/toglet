@@ -1,0 +1,43 @@
+/* Document-level defaults. All visual values come from tokens.css. */
+
+@import "./tokens.css";
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: var(--tg-font-sans);
+  color: var(--tg-text-primary);
+  /* The window is wider than the bar by the hit buffer, and that strip must show the desktop. */
+  background: transparent;
+  /* Digits change in place; proportional figures would jitter. */
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Only the account list scrolls, and it manages its own overflow. */
+body {
+  overflow: hidden;
+}
+
+/* The bar is positioned against one edge of this box; the remaining strip is the hit buffer. */
+#root {
+  position: relative;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+:focus-visible {
+  outline: 1px solid var(--tg-focus-ring);
+  outline-offset: 1px;
+}

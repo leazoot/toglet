@@ -1,0 +1,47 @@
+.heading {
+  composes: heading from "../../components/Dialog.module.css";
+}
+
+.body {
+  composes: body from "../../components/Dialog.module.css";
+}
+
+.actions {
+  composes: actions from "../../components/Dialog.module.css";
+}
+
+.primary {
+  composes: primary from "../../components/Dialog.module.css";
+}
+
+.secondary {
+  composes: secondary from "../../components/Dialog.module.css";
+}
+
+/* `folder · session`, in the account name's weight. */
+.subject {
+  margin: 6px 0 0;
+  font-size: var(--tg-text-email-size);
+  font-weight: var(--tg-text-account-weight);
+  line-height: 1.45;
+  color: var(--tg-text-primary);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.fine {
+  margin: 4px 0 0;
+  font-size: var(--tg-text-tag-size);
+  font-weight: var(--tg-text-body-weight);
+  line-height: 1.45;
+  color: var(--tg-text-tertiary);
+}
+
+.fine + .fine {
+  margin-top: 1px;
+}
+
+.alert {
+  color: var(--tg-quota-low);
+}
