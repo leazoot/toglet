@@ -5,6 +5,8 @@
 //! native executable is located directly.
 
 use std::io;
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, ChildStdout, Command, ExitStatus, Stdio};
 use std::time::{Duration, Instant};
@@ -19,6 +21,19 @@ const APP_SERVER_ARG: &str = "app-server";
 const SHUTDOWN_GRACE: Duration = Duration::from_secs(5);
 
 const EXIT_POLL: Duration = Duration::from_millis(10);
+
+/// Keeps Windows from opening a console window for the child.
+///
+/// Toglet has no console of its own, and the Codex executable is a console program, so Windows
+/// would create one window per subprocess - several per quota refresh. The flag has no effect on
+/// the pipes this process talks over.
+#[cfg(windows)]
+fn without_console(command: &mut Command) {
+    command.creation_flags(windows_sys::Win32::System::Threading::CREATE_NO_WINDOW);
+}
+
+#[cfg(not(windows))]
+fn without_console(_command: &mut Command) {}
 
 /// A verified path to the native Codex executable, so an unchecked path cannot reach
 /// [`AppServerProcess::spawn`].
@@ -257,14 +272,17 @@ impl AppServerProcess {
         home: &Path,
         phase: Phase,
     ) -> Result<(Self, ChildStdout)> {
-        let mut child = Command::new(binary.path())
+        let mut command = Command::new(binary.path());
+        command
             .arg(APP_SERVER_ARG)
             .env("CODEX_HOME", home)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             // Discarded rather than captured: the app server's diagnostics may contain paths and
             // credential material.
-            .stderr(Stdio::null())
+            .stderr(Stdio::null());
+        without_console(&mut command);
+        let mut child = command
             .spawn()
             .map_err(|error| not_installed(phase).with_detail(&error.to_string()))?;
 
@@ -616,5 +634,40 @@ mod tests {
     #[test]
     fn the_argument_list_is_a_single_compile_time_constant() {
         assert_eq!(APP_SERVER_ARG, "app-server");
+    }
+
+    /// Windows must not open a console window for the child.
+    ///
+    /// Scanned rather than observed: the flag cannot be read back from a spawned process, and
+    /// what has to hold is that future edits keep applying it. Toglet has no console, so without
+    /// it every quota read flashes a window at the user.
+    #[test]
+    fn the_app_server_is_started_without_a_console_window() {
+        let source = include_str!("process.rs");
+        let implementation = source
+            .split("#[cfg(test)]")
+            .next()
+            .expect("split always yields a first part")
+            .lines()
+            .filter(|line| !line.trim_start().starts_with("//"))
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        assert!(
+            implementation.contains("CREATE_NO_WINDOW"),
+            "the Windows branch must pass CREATE_NO_WINDOW"
+        );
+        assert_eq!(
+            implementation
+                .matches("without_console(&mut command)")
+                .count(),
+            1,
+            "every spawn goes through the one helper that applies the flag"
+        );
+        assert_eq!(
+            implementation.matches("Command::new").count(),
+            1,
+            "a second spawn site would need the flag of its own"
+        );
     }
 }
