@@ -36,6 +36,7 @@ function quotas(list: readonly AccountView[]): Record<string, Loadable<QuotaView
           source: "codex_app_server",
           stale: false,
           lastErrorCode: null,
+          resetCredits: null,
         },
       } satisfies Loadable<QuotaView>,
     ]),
@@ -52,6 +53,7 @@ function panel(overrides: Partial<PanelProps> = {}) {
     nowSeconds: NOW,
     onRefresh: () => undefined,
     onSelect: () => undefined,
+    onResetCredits: () => undefined,
     onOpenSettings: () => undefined,
     onAddAccount: () => undefined,
     onOpenAutoRun: () => undefined,
@@ -188,6 +190,7 @@ describe("the panel", () => {
         nowSeconds={NOW}
         onRefresh={() => undefined}
         onSelect={() => undefined}
+        onResetCredits={() => undefined}
         onOpenSettings={() => undefined}
         onAddAccount={() => undefined}
         onOpenAutoRun={() => undefined}

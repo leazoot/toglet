@@ -31,6 +31,7 @@ function ready(windows: readonly QuotaWindowView[]): Loadable<QuotaView> {
       source: "codex_app_server",
       stale: false,
       lastErrorCode: null,
+      resetCredits: null,
     },
   };
 }
@@ -41,12 +42,59 @@ function row(account: Partial<AccountView> = {}, quota: Loadable<QuotaView> = re
   );
 }
 
+function withCredits(availableCount: number, earliestExpiry: number | null): Loadable<QuotaView> {
+  const held = ready(BOTH);
+  return {
+    state: "ready",
+    value: {
+      ...(held as { value: QuotaView }).value,
+      resetCredits: { availableCount, earliestExpiry },
+    },
+  };
+}
+
 function descriptions(): string[] {
   return screen.getAllByRole("img").map((node) => node.getAttribute("aria-label") ?? "");
 }
 
 describe("an account row", () => {
   afterEach(cleanup);
+
+  it("shows the reset credit count the server reported", () => {
+    render(
+      <AccountRow account={ACCOUNT} quota={withCredits(2, null)} nowSeconds={NOW} last={false} />,
+    );
+
+    expect(screen.getByText("2")).toBeDefined();
+  });
+
+  it("shows no reset credit mark when none are held or none were reported", () => {
+    render(
+      <AccountRow account={ACCOUNT} quota={withCredits(0, null)} nowSeconds={NOW} last={false} />,
+    );
+    expect(screen.queryByText("0")).toBeNull();
+
+    cleanup();
+    // An older Codex never mentions them, which is not the same as holding none.
+    row();
+    expect(screen.queryByLabelText(/Reset credits/)).toBeNull();
+  });
+
+  it("offers the count as a button only when spending one is possible", () => {
+    const asked: string[] = [];
+    render(
+      <AccountRow
+        account={ACCOUNT}
+        quota={withCredits(3, null)}
+        nowSeconds={NOW}
+        last={false}
+        onResetCredits={(account) => asked.push(account.id)}
+      />,
+    );
+
+    screen.getByRole("button", { name: /Reset credits/ }).click();
+    expect(asked).toEqual([ACCOUNT.id]);
+  });
 
   it("shows the name, plan, address and both quota windows", () => {
     row();

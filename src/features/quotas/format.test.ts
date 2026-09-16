@@ -34,6 +34,7 @@ function view(windows: readonly QuotaWindowView[], overrides: Partial<QuotaView>
     source: "codex_app_server",
     stale: false,
     lastErrorCode: null,
+    resetCredits: null,
     ...overrides,
   };
 }

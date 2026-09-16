@@ -19,6 +19,8 @@ import { AutoRunSheet } from "./features/settings/AutoRunSheet";
 import { SettingsSheet } from "./features/settings/SettingsSheet";
 import { useSettings } from "./features/settings/store";
 import { useStartup } from "./features/startup/store";
+import { ResetOverlay } from "./features/accounts/ResetOverlay";
+import { useReset } from "./features/accounts/resetStore";
 import { SwitchOverlay } from "./features/switching/SwitchOverlay";
 import { useSwitching } from "./features/switching/store";
 import { traySummary } from "./features/dock/traySummary";
@@ -75,6 +77,14 @@ export function App(): JSX.Element {
   const confirmSwitching = useSwitching((state) => state.confirm);
   const cancelSwitching = useSwitching((state) => state.cancel);
   const toggleDetails = useSwitching((state) => state.toggleDetails);
+  const resetPhase = useReset((state) => state.phase);
+  const resetTarget = useReset((state) => state.target);
+  const resetHeld = useReset((state) => state.held);
+  const resetResult = useReset((state) => state.result);
+  const resetFailure = useReset((state) => state.failure);
+  const beginReset = useReset((state) => state.begin);
+  const confirmReset = useReset((state) => state.confirm);
+  const dismissReset = useReset((state) => state.dismiss);
 
   const settings = useSettings((state) => state.settings);
   const saving = useSettings((state) => state.saving);
@@ -368,6 +378,7 @@ export function App(): JSX.Element {
       nowSeconds={now}
       onRefresh={refresh}
       onSelect={beginSwitch}
+      onResetCredits={beginReset}
       onOpenSettings={() => {
         setAutoRunOpen(false);
         setSettingsOpen(true);
@@ -456,10 +467,23 @@ export function App(): JSX.Element {
         ) : null
       }
       overlay={
-        // Any non-null overlay pins the panel open. A begun switch outranks the continuation
-        // confirmation.
+        // Any non-null overlay pins the panel open. A begun switch outranks spending a credit,
+        // which in turn outranks the continuation confirmation: both of those were asked for by
+        // a click, while the proposal appears on its own.
         phase === "idle" ? (
-          proposal === null ? null : (
+          resetPhase !== "idle" ? (
+            <ResetOverlay
+              phase={resetPhase}
+              target={resetTarget}
+              held={resetHeld}
+              result={resetResult}
+              failure={resetFailure}
+              onConfirm={() => {
+                void confirmReset(nowSeconds());
+              }}
+              onDismiss={dismissReset}
+            />
+          ) : proposal === null ? null : (
             <AutoRunConfirm
               draft={proposal}
               accounts={accounts}

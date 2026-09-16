@@ -77,6 +77,11 @@
   /* Fixed so the hover arrow cannot reflow the row. */
   --tg-row-arrow-column: 20px;
   --tg-plan-tag-radius: 5px;
+  /* The reset-credit card under the avatar. Not in the design file: an addition. */
+  --tg-reset-card-height: 16px;
+  --tg-reset-card-gap: 3px;
+  --tg-reset-card-offset: 5px;
+  --tg-reset-card-mark: 9px;
 
   --tg-quota-label-width: 18px;
   --tg-quota-bar-height: 4px;

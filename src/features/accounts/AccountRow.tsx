@@ -5,9 +5,9 @@ import { Spinner } from "../../components/Spinner";
 import { t } from "../../i18n";
 import type { MessageKey } from "../../i18n";
 import { cx } from "../../styles/classes";
-import type { AccountView, QuotaView, QuotaWindowKind } from "../../types/ipc";
+import type { AccountView, QuotaView, QuotaWindowKind, ResetCreditsView } from "../../types/ipc";
 import type { Loadable } from "../../types/load";
-import { compactReset, percentLabel, tone, windowValue } from "../quotas/format";
+import { compactReset, percentLabel, resetCreditsOf, tone, windowValue } from "../quotas/format";
 import type { QuotaValue } from "../quotas/format";
 import styles from "./AccountRow.module.css";
 import { accentOf, initialOf } from "./identity";
@@ -24,6 +24,8 @@ export interface AccountRowProps {
   participating?: boolean;
   /** The account automatic continuation is running as right now. */
   executing?: boolean;
+  /** Asks to spend a reset credit. Absent leaves the count as a plain mark. */
+  onResetCredits?: (account: AccountView, held: number) => void;
 }
 
 export function AccountRow({
@@ -34,8 +36,10 @@ export function AccountRow({
   onSelect,
   participating = false,
   executing = false,
+  onResetCredits,
 }: AccountRowProps): JSX.Element {
   const notice = noticeKeyFor(account);
+  const credits = resetCreditsOf(quota);
   const switching = account.status === "switching";
   const selectable =
     onSelect !== undefined && !account.isActive && account.status !== "unsupported" && !switching;
@@ -108,6 +112,38 @@ export function AccountRow({
             />
           </svg>
         )}
+        {/* Below the avatar and absolutely positioned, so the row's height and columns are
+            unchanged whether or not any credit is held. */}
+        {credits !== null &&
+          (onResetCredits === undefined ? (
+            <span
+              className={styles["resets"]}
+              role="img"
+              aria-label={creditsLabel(credits, nowSeconds)}
+            >
+              <ResetMark />
+              <span className={styles["resetsCount"]}>{credits.availableCount}</span>
+            </span>
+          ) : (
+            <button
+              type="button"
+              className={cx(styles["resets"], styles["resetsButton"])}
+              aria-label={creditsLabel(credits, nowSeconds)}
+              onClick={(event) => {
+                // The row itself switches accounts; spending a credit must not do that too.
+                event.stopPropagation();
+                onResetCredits(account, credits.availableCount);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.stopPropagation();
+                }
+              }}
+            >
+              <ResetMark />
+              <span className={styles["resetsCount"]}>{credits.availableCount}</span>
+            </button>
+          ))}
       </span>
 
       <span className={styles["body"]}>
@@ -171,6 +207,40 @@ export function AccountRow({
         )}
       </span>
     </li>
+  );
+}
+
+/** The count is the only thing on screen; the sentence goes to assistive technology and hover. */
+function creditsLabel(credits: ResetCreditsView, nowSeconds: number): string {
+  const count = credits.availableCount;
+  if (credits.earliestExpiry === null) {
+    return t("row.resetCredits", { count });
+  }
+  return t("row.resetCreditsExpiring", {
+    count,
+    when: compactReset(credits.earliestExpiry, nowSeconds),
+  });
+}
+
+function ResetMark(): JSX.Element {
+  return (
+    <svg viewBox="0 0 12 12" className={styles["resetsMark"]} aria-hidden="true">
+      <path
+        d="M3.4 7.1 A2.8 2.8 0 1 0 4.2 4.3"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinecap="round"
+      />
+      <path
+        d="M2.1 2.9 L4.3 4.4 L2.6 6.1"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }
 

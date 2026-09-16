@@ -3,7 +3,9 @@
 use tauri::State;
 
 use super::state::{AppState, codex_home};
-use super::views::{AccountView, ErrorView, QuotaView, RemovalView, rollback_name};
+use super::views::{
+    AccountView, ErrorView, QuotaView, RemovalView, ResetCreditOutcomeView, rollback_name,
+};
 use crate::accounts::external_change::ActiveAccount;
 use crate::accounts::fingerprint::DuplicateCheck;
 use crate::accounts::{onboarding, rate_limits, repository};
@@ -146,6 +148,46 @@ fn refresh(state: &AppState, account_id: &str, now: i64) -> Result<QuotaView> {
 
     let snapshot = QuotaSnapshot::fresh(account_id, NormalisedQuota::from_raw(&raw), now);
     Ok(QuotaView::from_snapshot(snapshot.view(now)))
+}
+
+/// Redeems one reset credit for an account, clearing the windows it is eligible to clear.
+///
+/// Irreversible, so the interface confirms first. `now` identifies the attempt rather than the
+/// credit: retrying with the same value answers `alreadyRedeemed` instead of spending a second
+/// credit. A runtime too old to know the method fails as incompatible, which is shown as such.
+// `async`: starts an app server.
+#[tauri::command(async)]
+pub fn consume_reset_credit(
+    state: State<'_, AppState>,
+    account_id: String,
+    now: i64,
+) -> std::result::Result<ResetCreditOutcomeView, ErrorView> {
+    consume(state.inner(), &account_id, now).map_err(ErrorView::from)
+}
+
+fn consume(state: &AppState, account_id: &str, now: i64) -> Result<ResetCreditOutcomeView> {
+    let found = state.read_document(|document| {
+        let is_active = document.settings.active_account_id() == Some(account_id);
+        repository::find(document, account_id)
+            .map(|profile| (profile.credential_ref.clone(), is_active))
+    });
+    let (reference, is_active) = found.ok_or_else(unknown_account)?;
+    let reference = CredentialRef::new(&reference)?;
+    let binary = CodexBinary::resolve(Phase::ReadQuota)?;
+    let key = format!("reset-{account_id}-{now}");
+
+    let outcome = if is_active {
+        rate_limits::consume_active(&binary, &codex_home()?, &key)?
+    } else {
+        rate_limits::consume_stored(
+            state.credential_lock(),
+            state.secrets(),
+            &binary,
+            &reference,
+            &key,
+        )?
+    };
+    Ok(ResetCreditOutcomeView::from(outcome))
 }
 
 /// Removes an account and its saved sign-in.

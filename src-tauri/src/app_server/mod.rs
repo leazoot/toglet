@@ -13,7 +13,7 @@ mod wire;
 pub use client::AppServerClient;
 pub use dto::{
     CREDENTIAL_STORE_FILE, CREDENTIAL_STORE_KEY, ConfigWriteOutcome, CredentialStoreSetting,
-    RawCredits, RawLimitBucket, RawRateLimits, RawWindow,
+    RawCredits, RawLimitBucket, RawRateLimits, RawResetCredits, RawWindow, ResetOutcome,
 };
 pub use process::CodexBinary;
 pub use thread::{

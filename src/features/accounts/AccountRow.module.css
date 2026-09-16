@@ -124,6 +124,46 @@
   color: var(--tg-brand);
 }
 
+/* Under the avatar but out of the flex line, so holding credits changes neither the row's height
+   nor any column width. It may overhang the 28px avatar; the gap to the body absorbs it. */
+.resets {
+  position: absolute;
+  top: calc(100% + var(--tg-reset-card-offset));
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: var(--tg-reset-card-gap);
+  height: var(--tg-reset-card-height);
+  padding: 0 var(--tg-reset-card-gap);
+  border-radius: var(--tg-plan-tag-radius);
+  background: var(--tg-surface-avatar-well);
+  color: var(--tg-text-label);
+}
+
+.resetsButton {
+  border: 0;
+  cursor: pointer;
+  transition: background var(--tg-duration-icon) var(--tg-ease-out);
+}
+
+.resetsButton:hover {
+  background: var(--tg-surface-button-hover);
+}
+
+.resetsMark {
+  width: var(--tg-reset-card-mark);
+  height: var(--tg-reset-card-mark);
+  flex: none;
+}
+
+.resetsCount {
+  font-size: var(--tg-text-tag-size);
+  font-weight: var(--tg-text-tag-weight);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
 .body {
   flex: 1;
   min-width: 0;

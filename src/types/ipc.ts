@@ -10,6 +10,7 @@ export type CommandName =
   | "list_accounts"
   | "startup_recovery"
   | "refresh_quota"
+  | "consume_reset_credit"
   | "remove_account"
   | "set_dock_expansion"
   | "move_dock"
@@ -162,6 +163,28 @@ export interface QuotaWindowView {
   readonly resetsAt: number | null;
 }
 
+/**
+ * Reset credits, which clear the rate-limit windows when one is redeemed. Not the purchased
+ * usage balance the server reports beside them, which Toglet does not interpret.
+ */
+export interface ResetCreditsView {
+  /** The server's own count. Never the length of a detail list, which it may cap. */
+  readonly availableCount: number;
+  /** Unix seconds of the next expiry, when the server sent details that carry one. */
+  readonly earliestExpiry: number | null;
+}
+
+/**
+ * What redeeming a reset credit did. Only `reset` spent a credit and cleared the windows; every
+ * other value is a refusal and is shown as one.
+ */
+export type ResetOutcome = "reset" | "nothingToReset" | "noCredit" | "alreadyRedeemed" | "unknown";
+
+export interface ResetCreditOutcomeView {
+  readonly outcome: ResetOutcome;
+  readonly succeeded: boolean;
+}
+
 export interface QuotaView {
   readonly accountId: string;
   /** May be empty, or hold only one window. Both are honest answers. */
@@ -171,6 +194,8 @@ export interface QuotaView {
   readonly source: string;
   readonly stale: boolean;
   readonly lastErrorCode: string | null;
+  /** `null` when the server never mentioned them: not reported, not "none held". */
+  readonly resetCredits: ResetCreditsView | null;
 }
 
 export type Theme = "system" | "dark" | "light";

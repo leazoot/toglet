@@ -38,6 +38,8 @@ export interface PanelProps {
   onRefresh: () => void;
   /** Asks to switch to an account. The confirmation is the overlay's job. */
   onSelect: (account: AccountView) => void;
+  /** Asks to spend a reset credit. The confirmation is the overlay's job. */
+  onResetCredits: (account: AccountView, held: number) => void;
   /** The switch overlay, or `null`. Covers the list but leaves it visible. */
   overlay: JSX.Element | null;
   /**
@@ -66,6 +68,7 @@ export const Panel = forwardRef<HTMLDivElement, PanelProps>(function Panel(
     nowSeconds,
     onRefresh,
     onSelect,
+    onResetCredits,
     overlay,
     sheet,
     onOpenSettings,
@@ -178,6 +181,7 @@ export const Panel = forwardRef<HTMLDivElement, PanelProps>(function Panel(
                 nowSeconds={nowSeconds}
                 last={index === rows.length - 1}
                 onSelect={onSelect}
+                onResetCredits={onResetCredits}
                 participating={participants.has(account.id)}
                 executing={isExecuting(autorun, account.id)}
               />

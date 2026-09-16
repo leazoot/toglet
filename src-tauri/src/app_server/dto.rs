@@ -3,7 +3,7 @@
 //! Unknown fields are ignored so a new server field cannot break a read; missing required fields
 //! are an error, never a default (an absent `usedPercent` does not mean zero).
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::accounts::AccountIdentity;
 
@@ -89,7 +89,38 @@ pub(crate) struct RateLimitsResult {
     pub rate_limits: RateLimitsDto,
     #[serde(default)]
     pub rate_limits_by_limit_id: Option<std::collections::BTreeMap<String, RateLimitsDto>>,
+    /// Reset credits, which clear the rate-limit windows. Servers before 0.154 do not send the
+    /// field at all; that is "not reported", not "none held".
+    #[serde(default)]
+    pub rate_limit_reset_credits: Option<ResetCreditsSummaryDto>,
 }
+
+/// The reset-credit summary returned beside the windows.
+///
+/// Only the count and the expiry are modelled. The server also sends an opaque credit id and
+/// English display strings, and neither is needed to show a count or to redeem the next credit,
+/// so they are never materialised.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ResetCreditsSummaryDto {
+    pub available_count: i64,
+    /// `null` means only the count is known; an empty list means details were fetched and none
+    /// came back. The server may cap the list, so its length can be below `available_count`.
+    #[serde(default)]
+    pub credits: Option<Vec<ResetCreditDto>>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ResetCreditDto {
+    pub status: String,
+    /// Unix seconds; `null` when the credit does not expire.
+    #[serde(default)]
+    pub expires_at: Option<i64>,
+}
+
+/// The one status that can be redeemed; the rest are in flight or already spent.
+const CREDIT_AVAILABLE: &str = "available";
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -141,6 +172,8 @@ pub struct RawRateLimits {
     pub plan_type: Option<String>,
     /// `None` when the server did not report credits at all.
     pub credits: Option<RawCredits>,
+    /// `None` when the server never mentioned reset credits, which older ones do not.
+    pub reset_credits: Option<RawResetCredits>,
     /// The per-limit buckets, keyed by the server's `limit_id`. Empty on a server that does
     /// not send them; that is "not reported", not "no limits".
     pub by_limit_id: std::collections::BTreeMap<String, RawLimitBucket>,
@@ -162,6 +195,35 @@ pub struct RawCredits {
     pub unlimited: bool,
     /// The server's own string; `None` when it sent `null`.
     pub balance: Option<String>,
+}
+
+/// The reset credits an account holds.
+///
+/// Not to be confused with [`RawCredits`] beside it: that is purchased usage balance, which
+/// Toglet deliberately does not interpret. A reset credit clears the rate-limit windows.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RawResetCredits {
+    /// The server's own count of redeemable credits, which is the only count worth showing.
+    pub available_count: i64,
+    /// Earliest expiry among the detail rows that arrived. The server may cap that list, so this
+    /// is not necessarily the earliest of all of them; `None` when no details came or none expire.
+    pub earliest_expiry: Option<i64>,
+}
+
+impl From<ResetCreditsSummaryDto> for RawResetCredits {
+    fn from(dto: ResetCreditsSummaryDto) -> Self {
+        let earliest_expiry = dto
+            .credits
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|credit| credit.status == CREDIT_AVAILABLE)
+            .filter_map(|credit| credit.expires_at)
+            .min();
+        Self {
+            available_count: dto.available_count,
+            earliest_expiry,
+        }
+    }
 }
 
 impl From<CreditsDto> for RawCredits {
@@ -213,6 +275,7 @@ impl From<RateLimitsResult> for RawRateLimits {
             secondary: single.secondary,
             plan_type: single.plan_type,
             credits: single.credits,
+            reset_credits: result.rate_limit_reset_credits.map(RawResetCredits::from),
             by_limit_id: result
                 .rate_limits_by_limit_id
                 .unwrap_or_default()
@@ -220,6 +283,48 @@ impl From<RateLimitsResult> for RawRateLimits {
                 .map(|(limit_id, bucket)| (limit_id, RawLimitBucket::from(bucket)))
                 .collect(),
         }
+    }
+}
+
+/// `account/rateLimitResetCredit/consume` result.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ResetCreditConsumeResult {
+    pub outcome: String,
+}
+
+/// What redeeming a reset credit did.
+///
+/// Only [`Self::Reset`] spent a credit and cleared the windows; every other value is a refusal
+/// that must be reported as one, never as a quiet success.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ResetOutcome {
+    Reset,
+    /// No window is currently eligible, so nothing was spent.
+    NothingToReset,
+    /// The account holds no redeemable credit.
+    NoCredit,
+    /// This same attempt already succeeded earlier; a second credit was not spent.
+    AlreadyRedeemed,
+    /// A value this build has not heard of. Never treated as success.
+    Unknown,
+}
+
+impl ResetOutcome {
+    /// Maps the server's string; an unrecognised one is [`Self::Unknown`], not a guess.
+    pub(crate) fn from_wire(outcome: &str) -> Self {
+        match outcome {
+            "reset" => Self::Reset,
+            "nothingToReset" => Self::NothingToReset,
+            "noCredit" => Self::NoCredit,
+            "alreadyRedeemed" => Self::AlreadyRedeemed,
+            _ => Self::Unknown,
+        }
+    }
+
+    pub fn succeeded(self) -> bool {
+        matches!(self, Self::Reset)
     }
 }
 
@@ -452,6 +557,113 @@ mod tests {
         assert!(
             parsed.is_err(),
             "hasCredits cannot be guessed from a balance"
+        );
+    }
+
+    #[test]
+    fn the_recorded_reset_credit_payload_yields_a_count_and_the_earliest_expiry() {
+        // The shape recorded from a live 0.154.0 server, with the identifiers replaced.
+        let result: RateLimitsResult = parse(
+            r#"{"rateLimits":{"primary":{"usedPercent":34,"windowDurationMins":300}},
+                "rateLimitResetCredits":{"availableCount":2,"credits":[
+                {"id":"x","resetType":"codexRateLimits","status":"available",
+                 "grantedAt":1788500489,"expiresAt":1791092489,
+                 "title":"Full reset (Weekly + 5 hr)","description":"granted"},
+                {"id":"y","resetType":"codexRateLimits","status":"available",
+                 "grantedAt":1788563381,"expiresAt":1791155381,
+                 "title":"Full reset (Weekly + 5 hr)","description":"granted"}]}}"#,
+        )
+        .expect("the recorded payload parses");
+
+        let credits = RawRateLimits::from(result)
+            .reset_credits
+            .expect("reset credits are present");
+        assert_eq!(credits.available_count, 2);
+        assert_eq!(credits.earliest_expiry, Some(1_791_092_489));
+    }
+
+    #[test]
+    fn a_server_that_never_mentions_reset_credits_reports_none() {
+        let result: RateLimitsResult =
+            parse(r#"{"rateLimits":{"primary":{"usedPercent":5}}}"#).expect("payload parses");
+
+        // Servers before 0.154 send nothing here. That is not "no credits held".
+        assert_eq!(RawRateLimits::from(result).reset_credits, None);
+    }
+
+    #[test]
+    fn the_count_comes_from_the_server_not_from_the_capped_detail_list() {
+        let result: RateLimitsResult = parse(
+            r#"{"rateLimits":{},"rateLimitResetCredits":{"availableCount":7,
+                "credits":[{"id":"x","status":"available","grantedAt":1,"expiresAt":900}]}}"#,
+        )
+        .expect("payload parses");
+
+        let credits = RawRateLimits::from(result).reset_credits.expect("present");
+        // The server caps the list, so its length is not the count.
+        assert_eq!(credits.available_count, 7);
+    }
+
+    #[test]
+    fn only_a_redeemable_credit_contributes_an_expiry() {
+        let result: RateLimitsResult = parse(
+            r#"{"rateLimits":{},"rateLimitResetCredits":{"availableCount":1,"credits":[
+                {"id":"x","status":"redeemed","grantedAt":1,"expiresAt":100},
+                {"id":"y","status":"available","grantedAt":1,"expiresAt":500}]}}"#,
+        )
+        .expect("payload parses");
+
+        let credits = RawRateLimits::from(result).reset_credits.expect("present");
+        // A spent credit's earlier expiry must not be shown as the next one to lapse.
+        assert_eq!(credits.earliest_expiry, Some(500));
+    }
+
+    #[test]
+    fn a_count_without_details_is_still_a_count() {
+        let result: RateLimitsResult =
+            parse(r#"{"rateLimits":{},"rateLimitResetCredits":{"availableCount":3}}"#)
+                .expect("payload parses");
+
+        let credits = RawRateLimits::from(result).reset_credits.expect("present");
+        assert_eq!(credits.available_count, 3);
+        assert_eq!(credits.earliest_expiry, None);
+    }
+
+    #[test]
+    fn every_consume_outcome_maps_and_only_a_reset_counts_as_success() {
+        for (wire, expected) in [
+            ("reset", ResetOutcome::Reset),
+            ("nothingToReset", ResetOutcome::NothingToReset),
+            ("noCredit", ResetOutcome::NoCredit),
+            ("alreadyRedeemed", ResetOutcome::AlreadyRedeemed),
+        ] {
+            assert_eq!(ResetOutcome::from_wire(wire), expected);
+        }
+
+        // A value only a newer server sends is never taken for success.
+        assert_eq!(
+            ResetOutcome::from_wire("somethingNew"),
+            ResetOutcome::Unknown
+        );
+
+        assert!(ResetOutcome::Reset.succeeded());
+        for refused in [
+            ResetOutcome::NothingToReset,
+            ResetOutcome::NoCredit,
+            ResetOutcome::AlreadyRedeemed,
+            ResetOutcome::Unknown,
+        ] {
+            assert!(!refused.succeeded(), "{refused:?} did not spend a credit");
+        }
+    }
+
+    #[test]
+    fn a_consume_result_is_read_from_the_wire_shape() {
+        let result: ResetCreditConsumeResult =
+            parse(r#"{"outcome":"nothingToReset"}"#).expect("payload parses");
+        assert_eq!(
+            ResetOutcome::from_wire(&result.outcome),
+            ResetOutcome::NothingToReset
         );
     }
 

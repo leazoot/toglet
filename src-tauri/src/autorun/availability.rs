@@ -430,6 +430,7 @@ mod tests {
             secondary,
             plan_type: Some("plus".to_owned()),
             credits: None,
+            reset_credits: None,
             by_limit_id: Default::default(),
         });
         QuotaSnapshot::fresh("acct", quota, fetched_at)

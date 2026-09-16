@@ -69,6 +69,7 @@ function quota(accountId: string): unknown {
     source: "codex_app_server",
     stale: false,
     lastErrorCode: null,
+    resetCredits: null,
   };
 }
 

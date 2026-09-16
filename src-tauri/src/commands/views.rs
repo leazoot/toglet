@@ -4,9 +4,10 @@
 use serde::Serialize;
 
 use crate::accounts::AccountProfile;
+use crate::app_server::ResetOutcome;
 use crate::diagnostics::TogletError;
 use crate::process::ClientOutcome;
-use crate::quota::{QuotaSnapshotView, WindowKind};
+use crate::quota::{QuotaSnapshotView, ResetCredits, WindowKind};
 use crate::switching::{ClientVerdict, RollbackReport};
 
 /// What removing an account did.
@@ -76,6 +77,9 @@ pub struct QuotaView {
     pub source: &'static str,
     pub stale: bool,
     pub last_error_code: Option<String>,
+    /// Reset credits, or `None` when the server did not report them at all. A count of zero is
+    /// sent as-is; deciding not to draw it is the interface's job.
+    pub reset_credits: Option<ResetCredits>,
 }
 
 impl QuotaView {
@@ -99,6 +103,27 @@ impl QuotaView {
             source: view.source,
             stale: view.stale,
             last_error_code: view.last_error_code.map(str::to_owned),
+            reset_credits: view.quota.reset_credits,
+        }
+    }
+}
+
+/// What redeeming a reset credit did.
+///
+/// `succeeded` is true only for `reset`. Every other outcome left the account's credits untouched
+/// and must be presented as a refusal, not a quiet success.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResetCreditOutcomeView {
+    pub outcome: ResetOutcome,
+    pub succeeded: bool,
+}
+
+impl From<ResetOutcome> for ResetCreditOutcomeView {
+    fn from(outcome: ResetOutcome) -> Self {
+        Self {
+            outcome,
+            succeeded: outcome.succeeded(),
         }
     }
 }

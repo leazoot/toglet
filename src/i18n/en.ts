@@ -39,6 +39,34 @@ export const en = {
   "row.switching": "Switching…",
   "row.switchTo": "Switch to {name}",
   /* Read-only automatic-continuation marks: participant, and the account running right now. */
+  "row.resetCredits": "Reset credits: {count}",
+  "row.resetCreditsExpiring": "Reset credits: {count}. The next one expires in {when}.",
+  /* Redeeming a reset credit. Only `reset` is a success; the rest say plainly that nothing
+     was spent, since a credit cannot be recovered. */
+  "reset.title": "Reset credit",
+  "reset.confirmTitle": "Use a reset credit for {name}?",
+  "reset.confirmBody":
+    "This clears the 5-hour and weekly windows and uses up one of the {count} credits held. It cannot be undone.",
+  "reset.confirmAction": "Use one",
+  "reset.cancel": "Cancel",
+  "reset.close": "Close",
+  "reset.working": "Using a reset credit…",
+  "reset.doneTitle": "The windows were reset",
+  "reset.doneBody": "One credit was used. The quota is being read again.",
+  "reset.nothingTitle": "Nothing to reset",
+  "reset.nothingBody": "No window is eligible right now, so no credit was used.",
+  "reset.noCreditTitle": "No credit available",
+  "reset.noCreditBody": "Codex reports no credit that can be redeemed. Nothing was used.",
+  "reset.alreadyTitle": "Already done",
+  "reset.alreadyBody": "This attempt had already gone through. A second credit was not used.",
+  "reset.unknownTitle": "Unrecognised answer",
+  "reset.unknownBody":
+    "Codex answered with something this version does not know. Read the quota again before trying once more.",
+  "reset.unsupportedTitle": "This version of Codex cannot do that",
+  "reset.unsupportedBody": "Reset credits need a newer Codex. Nothing was changed.",
+  "reset.failedTitle": "The reset did not go through",
+  "reset.failedBody":
+    "Whether a credit was used is not known. Read the quota again before trying once more.",
   "row.participant": "Takes part in automatic continuation",
   "row.continuing": "Continuing",
 

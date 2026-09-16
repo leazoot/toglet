@@ -16,6 +16,7 @@ function reading(accountId = "acct-1"): QuotaView {
     source: "codex_app_server",
     stale: false,
     lastErrorCode: null,
+    resetCredits: null,
   };
 }
 

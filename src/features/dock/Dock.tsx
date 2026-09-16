@@ -63,6 +63,7 @@ export interface DockProps {
   nowSeconds: number;
   onRefresh: () => void;
   onSelect: (account: AccountView) => void;
+  onResetCredits: (account: AccountView, held: number) => void;
   onOpenSettings: () => void;
   onAddAccount: () => void;
   onOpenAutoRun: () => void;
@@ -104,6 +105,7 @@ export function Dock({
   nowSeconds,
   onRefresh,
   onSelect,
+  onResetCredits,
   onOpenSettings,
   onAddAccount,
   onOpenAutoRun,
@@ -265,6 +267,7 @@ export function Dock({
               nowSeconds={nowSeconds}
               onRefresh={onRefresh}
               onSelect={onSelect}
+              onResetCredits={onResetCredits}
               onOpenSettings={onOpenSettings}
               onAddAccount={onAddAccount}
               onOpenAutoRun={onOpenAutoRun}

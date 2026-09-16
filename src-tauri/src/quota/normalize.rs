@@ -5,7 +5,7 @@
 
 use serde::Serialize;
 
-use crate::app_server::{RawRateLimits, RawWindow};
+use crate::app_server::{RawRateLimits, RawResetCredits, RawWindow};
 
 const FIVE_HOUR_MINUTES: i64 = 300;
 const WEEKLY_MINUTES: i64 = 10_080;
@@ -88,6 +88,37 @@ pub struct NormalisedQuota {
     pub windows: Vec<QuotaWindow>,
     /// `None` when the server did not say, or said `"unknown"`.
     pub plan_type: Option<String>,
+    /// `None` when the server never mentioned reset credits, which is what servers before 0.154
+    /// do. That is "not reported", and must not be shown as holding none.
+    pub reset_credits: Option<ResetCredits>,
+}
+
+/// The reset credits an account holds. Redeeming one clears the rate-limit windows.
+///
+/// Not the `credits` balance reported beside it: that is purchased usage, which Toglet reads but
+/// deliberately does not interpret.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResetCredits {
+    /// The server's own count of redeemable credits.
+    pub available_count: i64,
+    /// Unix seconds of the next expiry among the details that arrived; `None` when none came or
+    /// none of them expire. The server may cap that list, so it is not always the true earliest.
+    pub earliest_expiry: Option<i64>,
+}
+
+impl ResetCredits {
+    fn from_raw(raw: &RawResetCredits) -> Self {
+        Self {
+            available_count: raw.available_count,
+            earliest_expiry: raw.earliest_expiry,
+        }
+    }
+
+    /// Whether there is anything worth showing. A zero count is not shown at all.
+    pub fn any(&self) -> bool {
+        self.available_count > 0
+    }
 }
 
 impl NormalisedQuota {
@@ -102,6 +133,7 @@ impl NormalisedQuota {
         Self {
             windows,
             plan_type: raw.plan_type.clone(),
+            reset_credits: raw.reset_credits.as_ref().map(ResetCredits::from_raw),
         }
     }
 
@@ -137,6 +169,7 @@ mod tests {
             secondary,
             plan_type: Some("plus".to_owned()),
             credits: None,
+            reset_credits: None,
             by_limit_id: Default::default(),
         }
     }

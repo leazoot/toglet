@@ -25,6 +25,7 @@ function ready(windows: readonly QuotaWindowView[], fetchedAt = NOW): Loadable<Q
       source: "codex_app_server",
       stale: false,
       lastErrorCode: null,
+      resetCredits: null,
     },
   };
 }

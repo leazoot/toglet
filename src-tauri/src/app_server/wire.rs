@@ -15,7 +15,8 @@ use super::dto::{
     AccountReadResult, CREDENTIAL_STORE_KEY, ConfigOrigin, ConfigReadResult,
     ConfigRequirementsResult, ConfigWriteErrorData, ConfigWriteOutcome, ConfigWriteResult,
     CredentialStoreSetting, InitializeResult, LoginCancelResult, LoginCompletedParams,
-    LoginStartResult, RateLimitsResult, RawRateLimits, runtime_version,
+    LoginStartResult, RateLimitsResult, RawRateLimits, ResetCreditConsumeResult, ResetOutcome,
+    runtime_version,
 };
 use super::thread::{
     ModelInfo, ModelListResult, ServerEvent, TextInput, ThreadEnvelope, ThreadListParams,
@@ -143,6 +144,21 @@ impl AppServerSession {
         let result: RateLimitsResult =
             self.call("account/rateLimits/read", Value::Null, NETWORK_TIMEOUT)?;
         Ok(RawRateLimits::from(result))
+    }
+
+    /// Redeems one reset credit, which clears the rate-limit windows that are eligible.
+    ///
+    /// `idempotency_key` identifies one attempt, not one credit: retrying with the same key
+    /// answers `alreadyRedeemed` rather than spending a second credit. No credit id is sent, so
+    /// the server picks the next one due. A runtime too old to know the method answers at the
+    /// protocol level, which `call` already maps to `runtime_incompatible`.
+    pub fn consume_reset_credit(&mut self, idempotency_key: &str) -> Result<ResetOutcome> {
+        let result: ResetCreditConsumeResult = self.call(
+            "account/rateLimitResetCredit/consume",
+            json!({ "idempotencyKey": idempotency_key }),
+            NETWORK_TIMEOUT,
+        )?;
+        Ok(ResetOutcome::from_wire(&result.outcome))
     }
 
     /// The threads the server can see, newest-updated first, optionally only those whose working

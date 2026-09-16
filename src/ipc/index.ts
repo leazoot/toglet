@@ -28,6 +28,7 @@ import type {
   RemoteView,
   RemovalView,
   RecoveryOutcome,
+  ResetCreditOutcomeView,
   SaveChannelRequest,
   SettingsPatch,
   SettingsView,
@@ -85,6 +86,18 @@ export function startupRecovery(): Promise<IpcResult<RecoveryOutcome | null>> {
  */
 export function refreshQuota(accountId: string, nowSeconds: number): Promise<IpcResult<QuotaView>> {
   return call<QuotaView>("refresh_quota", { accountId, now: nowSeconds });
+}
+
+/**
+ * Redeems one reset credit for an account. Irreversible, so the confirmation must have happened
+ * before this is called.
+ */
+export function consumeResetCredit(
+  accountId: string,
+  nowSeconds: number,
+): Promise<IpcResult<ResetCreditOutcomeView>> {
+  // `now` identifies this attempt on the Rust side, so retrying it cannot spend a second credit.
+  return call<ResetCreditOutcomeView>("consume_reset_credit", { accountId, now: nowSeconds });
 }
 
 /**

@@ -6,7 +6,8 @@
 import type { QuotaTone } from "../../components/QuotaRing";
 import { activeLanguage } from "../../i18n";
 import type { Language } from "../../i18n";
-import type { QuotaView, QuotaWindowKind } from "../../types/ipc";
+import type { QuotaView, QuotaWindowKind, ResetCreditsView } from "../../types/ipc";
+import type { Loadable } from "../../types/load";
 
 export type QuotaValue =
   | {
@@ -42,6 +43,17 @@ export function windowValue(view: QuotaView, kind: QuotaWindowKind): QuotaValue 
     remainingPercent: found.remainingPercent,
     resetsAt: found.resetsAt,
   };
+}
+
+/**
+ * How many reset credits the account holds, or `null` when there is nothing to show: the reading
+ * failed, the server never reported them, or it reported none.
+ */
+export function resetCreditsOf(quota: Loadable<QuotaView>): ResetCreditsView | null {
+  if (quota.state !== "ready" || quota.value.resetCredits === null) {
+    return null;
+  }
+  return quota.value.resetCredits.availableCount > 0 ? quota.value.resetCredits : null;
 }
 
 /** Checked against the current clock too: Rust's flag only reflects freshness when it answered. */

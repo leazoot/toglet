@@ -110,6 +110,7 @@ mod tests {
             secondary: None,
             plan_type: Some("plus".to_owned()),
             credits: None,
+            reset_credits: None,
             by_limit_id: Default::default(),
         })
     }

@@ -78,6 +78,7 @@ pub fn run() -> Result<(), StartupFailure> {
             commands::accounts::list_accounts,
             commands::accounts::import_current_account,
             commands::accounts::refresh_quota,
+            commands::accounts::consume_reset_credit,
             commands::accounts::remove_account,
             commands::switching::switch_account,
             commands::switching::inspect_clients,
