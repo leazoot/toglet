@@ -224,20 +224,16 @@ function creditsLabel(credits: ResetCreditsView, nowSeconds: number): string {
 
 function ResetMark(): JSX.Element {
   return (
+    // A ticket with a notch on each side: at 9px it is the one shape that still reads, and it
+    // says "one you hold" rather than "something refreshing".
     <svg viewBox="0 0 12 12" className={styles["resetsMark"]} aria-hidden="true">
       <path
-        d="M3.4 7.1 A2.8 2.8 0 1 0 4.2 4.3"
+        d="M1.6 4.2 A1.1 1.1 0 0 0 1.6 7.8 L1.6 9.2 A0.7 0.7 0 0 0 2.3 9.9 L9.7 9.9
+           A0.7 0.7 0 0 0 10.4 9.2 L10.4 7.8 A1.1 1.1 0 0 1 10.4 4.2 L10.4 2.8
+           A0.7 0.7 0 0 0 9.7 2.1 L2.3 2.1 A0.7 0.7 0 0 0 1.6 2.8 Z"
         fill="none"
         stroke="currentColor"
-        strokeWidth="1.3"
-        strokeLinecap="round"
-      />
-      <path
-        d="M2.1 2.9 L4.3 4.4 L2.6 6.1"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.3"
-        strokeLinecap="round"
+        strokeWidth="1.15"
         strokeLinejoin="round"
       />
     </svg>

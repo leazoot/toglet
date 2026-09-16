@@ -135,20 +135,25 @@
   align-items: center;
   gap: var(--tg-reset-card-gap);
   height: var(--tg-reset-card-height);
-  padding: 0 var(--tg-reset-card-gap);
-  border-radius: var(--tg-plan-tag-radius);
-  background: var(--tg-surface-avatar-well);
-  color: var(--tg-text-label);
+  padding: 0 var(--tg-reset-card-pad-count) 0 var(--tg-reset-card-pad-mark);
+  border-radius: var(--tg-reset-card-radius);
+  background: var(--tg-reset-card-bg);
+  box-shadow: inset 0 0 0 var(--tg-panel-hairline) var(--tg-reset-card-line);
+  color: var(--tg-brand);
 }
 
 .resetsButton {
   border: 0;
   cursor: pointer;
-  transition: background var(--tg-duration-icon) var(--tg-ease-out);
+  transition:
+    background var(--tg-duration-icon) var(--tg-ease-out),
+    box-shadow var(--tg-duration-icon) var(--tg-ease-out);
 }
 
+/* Hover deepens the same wash rather than turning grey, which would read as disabled. */
 .resetsButton:hover {
-  background: var(--tg-surface-button-hover);
+  background: var(--tg-reset-card-bg-hover);
+  box-shadow: inset 0 0 0 var(--tg-panel-hairline) var(--tg-reset-card-line-hover);
 }
 
 .resetsMark {

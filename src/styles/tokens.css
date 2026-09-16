@@ -82,6 +82,11 @@
   --tg-reset-card-gap: 3px;
   --tg-reset-card-offset: 5px;
   --tg-reset-card-mark: 9px;
+  /* Rounded to the full height: a pill reads as something held, a 5px box reads as a label. */
+  --tg-reset-card-radius: 999px;
+  /* The glyph side is tighter than the numeral side, so the two look equally inset. */
+  --tg-reset-card-pad-mark: 4px;
+  --tg-reset-card-pad-count: 5px;
 
   --tg-quota-label-width: 18px;
   --tg-quota-bar-height: 4px;
@@ -218,6 +223,13 @@
   --tg-brand: #40e6a4;
   --tg-active-tag-bg: rgba(64, 230, 164, 0.13);
   --tg-active-tag-text: #40e6a4;
+  /* The reset-credit pill. Its own tokens rather than the Active tag's: they read alike today
+     but mean different things, and one must be able to change without the other. */
+  --tg-reset-card-bg: rgba(64, 230, 164, 0.13);
+  --tg-reset-card-line: rgba(64, 230, 164, 0.3);
+  /* Hover deepens the same wash. Going grey here would read as "disabled", not "pressable". */
+  --tg-reset-card-bg-hover: rgba(64, 230, 164, 0.22);
+  --tg-reset-card-line-hover: rgba(64, 230, 164, 0.5);
   --tg-active-row-bg: rgba(64, 230, 164, 0.045);
 
   --tg-surface-base: #0b0c0d;
@@ -313,6 +325,10 @@
     --tg-brand: #0e8f5e;
     --tg-active-tag-bg: rgba(14, 143, 94, 0.12);
     --tg-active-tag-text: #0b7049;
+    --tg-reset-card-bg: rgba(14, 143, 94, 0.1);
+    --tg-reset-card-line: rgba(14, 143, 94, 0.3);
+    --tg-reset-card-bg-hover: rgba(14, 143, 94, 0.18);
+    --tg-reset-card-line-hover: rgba(14, 143, 94, 0.5);
     --tg-active-row-bg: rgba(14, 143, 94, 0.05);
 
     --tg-surface-base: #fbfaf8;
@@ -390,6 +406,10 @@
   --tg-brand: #0e8f5e;
   --tg-active-tag-bg: rgba(14, 143, 94, 0.12);
   --tg-active-tag-text: #0b7049;
+  --tg-reset-card-bg: rgba(14, 143, 94, 0.1);
+  --tg-reset-card-line: rgba(14, 143, 94, 0.3);
+  --tg-reset-card-bg-hover: rgba(14, 143, 94, 0.18);
+  --tg-reset-card-line-hover: rgba(14, 143, 94, 0.5);
   --tg-active-row-bg: rgba(14, 143, 94, 0.05);
 
   --tg-surface-base: #fbfaf8;
