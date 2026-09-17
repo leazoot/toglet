@@ -912,7 +912,8 @@ fn a_sentence_sent_while_a_turn_runs_is_not_kept_for_the_next_one() {
         script.resume.push_back(Ok(Resumed::Started {
             turn_id: "t2".to_owned(),
         }));
-        script.poll.push_back(exhausted("t2"));
+        // Nothing scripted for the poll yet: an empty script answers "still running", which
+        // holds t2 open until the test says otherwise.
         script.select.push_back(now("a"));
         script.verify.push_back(available("a"));
         script.resume.push_back(Ok(Resumed::Started {
@@ -927,6 +928,13 @@ fn a_sentence_sent_while_a_turn_runs_is_not_kept_for_the_next_one() {
     rig.handle()
         .send_text("this must never be sent".to_owned())
         .expect("sent");
+    // The loop drains its inbox every slice; this is long enough for the sentence to have been
+    // handled while the turn is still running. Scripting the exhaustion up front let a slow
+    // machine end t2 first, and a sentence arriving between turns is meant for the next one -
+    // which is a different test.
+    std::thread::sleep(SLICE * 40);
+    rig.ports
+        .with(|script| script.poll.push_back(exhausted("t2")));
 
     rig.until_calls(2, |call| matches!(call, Call::Resume(..)));
     let calls = rig.ports.calls();
