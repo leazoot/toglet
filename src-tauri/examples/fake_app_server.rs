@@ -121,7 +121,7 @@ fn turn_json(id: &str, status: &str, error: Option<&str>) -> String {
 fn turns_json(scenario: &str) -> String {
     let last = match scenario {
         "usage_limit_turn" => turn_json("t2", "failed", completed_turn_error(scenario)),
-        "turn_in_progress" => turn_json("t2", "inProgress", None),
+        "turn_in_progress" | "parked_on_question" => turn_json("t2", "inProgress", None),
         _ => turn_json("t2", "completed", None),
     };
     format!("[{},{last}]", turn_json("t1", "completed", None))
@@ -130,7 +130,21 @@ fn turns_json(scenario: &str) -> String {
 fn thread_status_json(scenario: &str) -> &'static str {
     match scenario {
         "turn_in_progress" => r#"{"type":"active","activeFlags":[]}"#,
+        // Parked on a question *before* it is resumed, unlike `waiting_on_user_input`, which
+        // only becomes blocked after a turn is started.
+        "parked_on_question" => r#"{"type":"active","activeFlags":["waitingOnUserInput"]}"#,
         _ => r#"{"type":"notLoaded"}"#,
+    }
+}
+
+/// The status a scenario's thread reports once it has been resumed.
+///
+/// A resumed thread is loaded, so the quiet answer is `idle` rather than the `notLoaded` a
+/// listing gives - unless it is genuinely busy, or parked waiting for a person to answer.
+fn resumed_status_json(scenario: &str) -> &'static str {
+    match scenario {
+        "turn_in_progress" | "parked_on_question" => thread_status_json(scenario),
+        _ => r#"{"type":"idle"}"#,
     }
 }
 
@@ -162,12 +176,13 @@ fn turn_follow_ups(scenario: &str, method: &str) -> Vec<String> {
             r#"{{"jsonrpc":"2.0","method":"thread/status/changed","params":{{"threadId":"{THREAD_ID}","status":{status}}}}}"#
         )
     };
-    let completed = |status: &str, error: Option<&str>| {
+    let completed_turn = |id: &str, status: &str, error: Option<&str>| {
         format!(
             r#"{{"jsonrpc":"2.0","method":"turn/completed","params":{{"threadId":"{THREAD_ID}","turn":{}}}}}"#,
-            turn_json(TURN_ID, status, error)
+            turn_json(id, status, error)
         )
     };
+    let completed = |status: &str, error: Option<&str>| completed_turn(TURN_ID, status, error);
 
     match (method, scenario) {
         // The model asked a question. A server-initiated *request* follows: it carries an id
@@ -182,10 +197,16 @@ fn turn_follow_ups(scenario: &str, method: &str) -> Vec<String> {
             completed("interrupted", None),
             status_changed(r#"{"type":"idle"}"#),
         ],
+        // A thread already parked on a question when it is resumed. The turn holding the
+        // question is `t2`, not the one `turn/start` hands out, so it ends under its own id.
+        ("turn/interrupt", "parked_on_question") => vec![
+            completed_turn("t2", "interrupted", None),
+            status_changed(r#"{"type":"idle"}"#),
+        ],
         (
             "turn/start",
             "turn_completed" | "usage_limit_turn" | "unauthorized_turn" | "network_turn"
-            | "turn_in_progress",
+            | "turn_in_progress" | "parked_on_question",
         ) => {
             let error = completed_turn_error(scenario);
             let status = if error.is_some() {
@@ -248,7 +269,9 @@ fn thread_reply(
                 THREAD_ID,
                 "/fake/project-a",
                 "Fake session",
-                r#"{"type":"idle"}"#,
+                // The real server reports the thread's actual state here, which is how a
+                // caller learns it is parked on a question before it starts anything.
+                resumed_status_json(scenario),
                 &turns_json(scenario),
             )
         ),
