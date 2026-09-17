@@ -1,6 +1,6 @@
 [package]
 name = "toglet"
-version = "0.0.2"
+version = "0.0.3"
 description = "Codex account quota display and manual account switching"
 edition = "2024"
 rust-version = "1.85.0"
@@ -41,6 +41,9 @@ lettre = { version = "0.11.23", default-features = false, features = [
   "builder",
   "tokio1-native-tls",
 ] }
+# Sealing the agent excerpt that rides in a remote receipt; HMAC proves who sent it but hides
+# nothing, and the bridge is untrusted. Only `remote/crypt.rs` may use this.
+aes-gcm = "0.11.1"
 
 [target.'cfg(windows)'.dependencies]
 # Win32 bindings for user-only DACLs, DPAPI, process probing and other platform calls.
