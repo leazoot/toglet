@@ -21,7 +21,8 @@ const PHASE: Phase = Phase::Remote;
 
 const REMOTE_FILE: &str = "remote.json";
 
-pub const REMOTE_SCHEMA_VERSION: u32 = 1;
+/// The version this build writes. Bump it together with a migration step.
+pub const REMOTE_SCHEMA_VERSION: u32 = 2;
 
 /// Domain separator for the binding fingerprint; not a secret.
 const BINDING_DOMAIN: &[u8] = b"toglet.remote-binding.v1";
@@ -33,6 +34,12 @@ pub struct RemoteConfig {
     pub schema_version: u32,
     /// Off by default; turning it off deletes the credential entry.
     pub enabled: bool,
+    /// Whether the agent's last message may ride along, sealed, in a receipt (FR-REMOTE-016).
+    ///
+    /// `serde(default)` so a version 1 file still parses; [`migrate`] then sets it explicitly.
+    /// Off by default: an upgrade must not start sending session content unasked.
+    #[serde(default)]
+    pub share_excerpt: bool,
     /// Host only; the full address (whose path acts as a token) lives in the credential store.
     pub bridge_host: String,
     pub device_id: String,
@@ -82,6 +89,7 @@ impl Default for RemoteConfig {
         Self {
             schema_version: REMOTE_SCHEMA_VERSION,
             enabled: false,
+            share_excerpt: false,
             bridge_host: String::new(),
             device_id: fresh_id(),
             session_id: fresh_id(),
@@ -116,6 +124,20 @@ impl RemoteConfig {
         self.recent_nonces.clear();
         self.last_command = None;
     }
+}
+
+/// Brings a parsed file up to [`REMOTE_SCHEMA_VERSION`], one explicit step per version.
+///
+/// The same shape as `storage::document::migrate`: never guess from whether a field is present,
+/// say what each version lacked and set it.
+fn migrate(mut config: RemoteConfig) -> RemoteConfig {
+    // Version 1 had no excerpt switch. Leaving it off is the safe reading of an older file:
+    // the user never agreed to send session content.
+    if config.schema_version < 2 {
+        config.schema_version = 2;
+        config.share_excerpt = false;
+    }
+    config
 }
 
 /// An irreversible derivation of a bound session's id; the id itself may not be persisted here.
@@ -187,7 +209,8 @@ impl RemoteStore {
             })
             .and_then(|()| {
                 serde_json::from_str::<RemoteConfig>(&text).map_err(|_| LoadProblem::Unreadable)
-            });
+            })
+            .map(migrate);
 
         match parsed {
             Ok(config) => (config, LoadOutcome::Loaded),
@@ -510,6 +533,49 @@ mod tests {
                 problem: LoadProblem::Unreadable
             }
         ));
+    }
+
+    /// A version 1 file has no excerpt switch. It must load with the switch off and come back
+    /// as version 2 - never by guessing from whether the field was there.
+    #[test]
+    fn a_version_one_file_loads_with_the_excerpt_switch_off_and_becomes_version_two() {
+        let home = IsolatedHome::create(Phase::Storage).expect("scratch");
+        let store = RemoteStore::new(home.path());
+        std::fs::write(
+            store.path(),
+            br#"{"schemaVersion":1,"enabled":true,"bridgeHost":"bridge.example.com",
+                "deviceId":"6f1c00112233445566778899aabbccdd",
+                "sessionId":"a83b4c1d9e0f2a3b4c5d6e7f80912233",
+                "bindingFingerprint":null,"cursor":7,"recentNonces":[],"lastCommand":null}"#,
+        )
+        .expect("written");
+
+        let (config, outcome) = store.load();
+
+        assert!(matches!(outcome, LoadOutcome::Loaded));
+        assert_eq!(config.schema_version, REMOTE_SCHEMA_VERSION);
+        assert!(!config.share_excerpt, "an upgrade must not start sharing");
+        // Everything version 1 did hold survived.
+        assert!(config.enabled);
+        assert_eq!(config.cursor, 7);
+        assert_eq!(config.bridge_host, "bridge.example.com");
+    }
+
+    /// Turning the feature off clears pairing and replay state, never a preference.
+    #[test]
+    fn disabling_keeps_the_excerpt_preference() {
+        let mut config = RemoteConfig {
+            share_excerpt: true,
+            ..RemoteConfig::default()
+        };
+        config.enabled = true;
+        config.cursor = 9;
+
+        config.disable();
+
+        assert!(!config.enabled);
+        assert_eq!(config.cursor, 0);
+        assert!(config.share_excerpt, "a preference is not pairing state");
     }
 
     #[test]

@@ -1,0 +1,27 @@
+.page {
+  composes: page from "../notify/NotifySection.module.css";
+}
+
+.hint {
+  composes: hint from "../notify/NotifySection.module.css";
+}
+
+.alert {
+  composes: alert from "../notify/NotifySection.module.css";
+}
+
+.sectionTitle {
+  composes: sectionTitle from "../settings/SettingsSheet.module.css";
+  margin-top: 8px;
+}
+
+.tool {
+  composes: tool from "../remote/RemoteSection.module.css";
+}
+
+/* The credit the feed's terms ask for, tucked under the switch. */
+.credit {
+  margin: -4px 0 4px;
+  font-size: var(--tg-text-footer-size);
+  color: var(--tg-text-tertiary);
+}

@@ -83,12 +83,16 @@ impl Guard {
 /// The user event an action stands for; `Status` only requests a receipt, so it maps to `None`.
 ///
 /// There is deliberately no remote-only event: every action is one the panel can also send.
+///
+/// `Send` also maps to `None`, but for the opposite reason: it has no event *yet*. TASK-201
+/// wires it to the takeover chain. Until then the poller refuses it outright - mapping to
+/// `None` here must never be read as "nothing to do, so it worked".
 pub fn event_for(action: Action) -> Option<UserEvent> {
     match action {
         Action::Resume => Some(UserEvent::Resume),
         Action::Pause => Some(UserEvent::Pause),
         Action::Cancel => Some(UserEvent::Cancel),
-        Action::Status => None,
+        Action::Status | Action::Send => None,
     }
 }
 
@@ -119,7 +123,7 @@ mod tests {
 
     fn payload(action: &str, counter: u64, nonce: &str, issued_at: i64) -> String {
         let signed = [
-            "toglet-remote/1",
+            "toglet-remote/2",
             "command",
             action,
             SESSION,
@@ -127,11 +131,13 @@ mod tests {
             &counter.to_string(),
             nonce,
             &issued_at.to_string(),
+            // The four argument-free actions sign an empty text segment.
+            "",
         ]
         .join("\n");
         let mac = mac::sign_hex(SECRET, signed.as_bytes());
         format!(
-            r#"{{"v":1,"kind":"command","action":"{action}","sessionId":"{SESSION}",
+            r#"{{"v":2,"kind":"command","action":"{action}","sessionId":"{SESSION}",
                "observedState":"needs_human","counter":{counter},"nonce":"{nonce}",
                "issuedAt":{issued_at},"mac":"{mac}"}}"#
         )
@@ -262,6 +268,23 @@ mod tests {
         assert_eq!(event_for(Action::Pause), Some(UserEvent::Pause));
         assert_eq!(event_for(Action::Cancel), Some(UserEvent::Cancel));
         assert_eq!(event_for(Action::Status), None);
+    }
+
+    /// `send` maps to no `UserEvent` because its text cannot ride on one; the poller carries it
+    /// instead - through `AutoRun`, the same door the panel uses, never a second path.
+    #[test]
+    fn send_carries_its_text_through_the_one_door_the_panel_uses() {
+        assert_eq!(event_for(Action::Send), None);
+
+        let loop_source = include_str!("../commands/remote_poll.rs");
+        assert!(
+            loop_source.contains("autorun.send_text("),
+            "the poll loop must deliver a send through AutoRun, not by its own route"
+        );
+        assert!(
+            !loop_source.contains("thread/resume") && !loop_source.contains("turn/start"),
+            "the poll loop must never reach the app server itself"
+        );
     }
 
     #[test]

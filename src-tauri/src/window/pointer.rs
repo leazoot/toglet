@@ -27,8 +27,13 @@ const REASSERT_EVERY: u32 = 25;
 pub struct Reach {
     /// The bar's hover target in physical screen pixels; `None` before the window is placed.
     pub bar: Option<Placement>,
-    /// The panel is open, so the whole window is surface.
+    /// The panel is open, so the panel's rectangle is surface too.
     pub expanded: bool,
+    /// The open panel's rectangle in physical screen pixels, as the interface measured it.
+    ///
+    /// `None` while closed, and also while open if no measurement arrived: the window is a
+    /// full-height strip, so treating "open" as "the whole window" blanks a column of the screen.
+    pub panel: Option<Placement>,
     /// `bar` is stale while dragging, so nothing is let through until the drag settles.
     pub dragging: bool,
 }
@@ -36,8 +41,20 @@ pub struct Reach {
 impl Reach {
     /// Whether a pointer at `(x, y)`, in physical screen pixels, should reach the window.
     pub fn reaches(&self, x: f64, y: f64) -> bool {
-        if self.expanded || self.dragging {
+        if self.dragging {
             return true;
+        }
+        if self.expanded {
+            // The window is a full-height strip, so an open panel must claim its own rectangle
+            // rather than the whole window - the rest of that column belongs to other apps.
+            // Without a measurement, the old whole-window behaviour: an unreachable panel is
+            // worse than a swallowed click.
+            return match self.panel {
+                Some(panel) => {
+                    panel.contains(x, y) || self.bar.is_some_and(|bar| bar.contains(x, y))
+                }
+                None => true,
+            };
         }
         // No rectangle yet: an unreachable bar is worse than a swallowed click.
         self.bar.is_none_or(|bar| bar.contains(x, y))
@@ -159,16 +176,54 @@ mod tests {
         assert!(!reach.reaches(1880.0, 200.0));
     }
 
+    fn panel() -> Placement {
+        Placement {
+            x: 1463,
+            y: 500,
+            width: 348,
+            height: 300,
+        }
+    }
+
     #[test]
-    fn an_open_panel_takes_the_whole_window() {
+    fn an_open_panel_takes_its_own_rectangle_and_the_bar() {
         // Clicks through the open panel would land on the desktop behind it.
         let reach = Reach {
             bar: Some(bar()),
+            panel: Some(panel()),
             expanded: true,
             dragging: false,
         };
 
-        assert!(reach.reaches(1600.0, 700.0));
+        assert!(reach.reaches(1600.0, 700.0), "inside the panel");
+        assert!(reach.reaches(1880.0, 700.0), "the bar stays reachable");
+    }
+
+    #[test]
+    fn an_open_panel_lets_the_rest_of_the_strip_through() {
+        // The window is a full-height strip: everything in that column outside the panel and the
+        // bar belongs to whatever app is behind it.
+        let reach = Reach {
+            bar: Some(bar()),
+            panel: Some(panel()),
+            expanded: true,
+            dragging: false,
+        };
+
+        assert!(!reach.reaches(1600.0, 60.0), "above the panel");
+        assert!(!reach.reaches(1600.0, 1000.0), "below the panel");
+    }
+
+    #[test]
+    fn an_open_panel_that_was_never_measured_still_takes_the_whole_window() {
+        let reach = Reach {
+            bar: Some(bar()),
+            panel: None,
+            expanded: true,
+            dragging: false,
+        };
+
+        assert!(reach.reaches(1600.0, 60.0));
     }
 
     #[test]
@@ -176,6 +231,7 @@ mod tests {
         // The rectangle is where the bar was; letting the pointer through mid-drag loses capture.
         let reach = Reach {
             bar: Some(bar()),
+            panel: None,
             expanded: false,
             dragging: true,
         };
@@ -199,6 +255,7 @@ mod tests {
             gate.snapshot(),
             Reach {
                 bar: Some(bar()),
+                panel: None,
                 expanded: true,
                 dragging: false,
             }

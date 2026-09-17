@@ -10,7 +10,7 @@
 //   node e2e.mjs            run the round trip and rewrite the fixtures
 //   node e2e.mjs --check    run the round trip only (fixtures must already match)
 
-import { createHmac } from "node:crypto";
+import { createCipheriv, createHash, createHmac } from "node:crypto";
 import { spawn } from "node:child_process";
 import { writeFileSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -28,9 +28,50 @@ const PORT = 0;
 
 const mac = (message) => createHmac("sha256", SECRET).update(message).digest("hex");
 
-function command(action, counter, observedState, nonce, issuedAt) {
+// The excerpt travels sealed, not merely signed: HMAC proves who sent a receipt but hides
+// nothing in it, and the bridge hands the last receipt to whoever asks. The sealing key is the
+// shared secret under its own domain separator, so the bytes that sign a receipt are never the
+// bytes that open one. Mirrors src-tauri/src/remote/crypt.rs.
+const EXCERPT_DOMAIN = "toglet-remote/2 excerpt";
+
+/** Sealed with a fixed nonce, so the fixture is reproducible and a diff means a real change. */
+function sealExcerpt(plaintext, nonceHex) {
+  const key = createHash("sha256")
+    .update(EXCERPT_DOMAIN + SECRET, "utf8")
+    .digest();
+  const cipher = createCipheriv("aes-256-gcm", key, Buffer.from(nonceHex, "hex"));
+  const body = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
+  // Rust's `aes-gcm` returns the tag appended to the ciphertext; Node hands them over apart.
+  return {
+    ciphertext: Buffer.concat([body, cipher.getAuthTag()]).toString("hex"),
+    nonce: nonceHex,
+  };
+}
+
+// The key the bridge checks a `/status` read against. Derived one-way from the shared secret, so
+// a bridge that is taken over can authenticate readers but still cannot sign a command: that MAC
+// uses the raw secret, which never reaches it. Deriving it here from SECRET is also what proves
+// the page and the bridge agree on the derivation.
+const STATUS_DOMAIN = "toglet-remote/2 status";
+const STATUS_KEY = createHash("sha256")
+  .update(STATUS_DOMAIN + SECRET, "utf8")
+  .digest();
+
+/** What the page sends on a `/status` read. `at` lets a test offer a stale timestamp. */
+function statusHeaders(at = Math.floor(Date.now() / 1000)) {
+  const signed = ["toglet-remote/2", "status", String(at)].join("\n");
+  return {
+    "x-toglet-ts": String(at),
+    "x-toglet-mac": createHmac("sha256", STATUS_KEY).update(signed).digest("hex"),
+  };
+}
+
+const EXCERPT_TEXT = "解析器有两种改法，我建议先补一个分支。";
+const SEALED_EXCERPT = sealExcerpt(EXCERPT_TEXT, "0f1e2d3c4b5a69788796a5b4");
+
+function command(action, counter, observedState, nonce, issuedAt, text = "") {
   const signed = [
-    "toglet-remote/1",
+    "toglet-remote/2",
     "command",
     action,
     SESSION,
@@ -38,9 +79,12 @@ function command(action, counter, observedState, nonce, issuedAt) {
     String(counter),
     nonce,
     String(issuedAt),
+    // Always present, empty for the argument-free actions. Signing it is what stops the bridge
+    // rewriting the one thing on this path worth rewriting.
+    text,
   ].join("\n");
-  return {
-    v: 1,
+  const envelope = {
+    v: 2,
     kind: "command",
     action,
     sessionId: SESSION,
@@ -50,6 +94,9 @@ function command(action, counter, observedState, nonce, issuedAt) {
     issuedAt,
     mac: mac(signed),
   };
+  // Absent and empty sign identically, so only `send` carries the field at all.
+  if (text !== "") envelope.text = text;
+  return envelope;
 }
 
 function receipt(
@@ -60,9 +107,10 @@ function receipt(
   nextPollSeconds,
   resumeCount,
   lastCommand,
+  excerpt = null,
 ) {
   const signed = [
-    "toglet-remote/1",
+    "toglet-remote/2",
     "receipt",
     DEVICE,
     SESSION,
@@ -73,12 +121,16 @@ function receipt(
     String(cursor),
     String(nextPollSeconds),
     String(resumeCount),
+    // The sealed excerpt. A sealed value is never empty (GCM always emits a tag), so absent and
+    // present cannot alias.
+    excerpt === null ? "" : excerpt.ciphertext,
+    excerpt === null ? "" : excerpt.nonce,
     lastCommand === null ? "" : String(lastCommand.counter),
     lastCommand === null ? "" : lastCommand.action,
     lastCommand === null ? "" : lastCommand.result,
   ].join("\n");
   return {
-    v: 1,
+    v: 2,
     kind: "receipt",
     deviceId: DEVICE,
     sessionId: SESSION,
@@ -89,6 +141,8 @@ function receipt(
     cursor,
     nextPollSeconds,
     resumeCount,
+    excerptCiphertext: excerpt === null ? null : excerpt.ciphertext,
+    excerptNonce: excerpt === null ? null : excerpt.nonce,
     lastCommand,
     mac: mac(signed),
   };
@@ -110,6 +164,15 @@ const fixtures = {
     action: "resume",
     result: "applied",
   }),
+  // The one action that carries a parameter; its text is inside the signature.
+  send: command(
+    "send",
+    44,
+    "needs_human",
+    "1a2b0011223344556677889900aabbcc",
+    ISSUED_AT,
+    "go with your recommendation",
+  ),
   receiptWaiting: receipt(
     "waiting_quota",
     "five_hour_exhausted",
@@ -119,6 +182,12 @@ const fixtures = {
     3,
     null,
   ),
+  // Sealed here, opened by Toglet in `remote_wire.rs`. Without this the two AES-GCM sides could
+  // disagree about the derived key, the nonce or where the tag sits, and the only symptom would
+  // be a phone that says "cannot decrypt" forever.
+  sealedExcerpt: { plaintext: EXCERPT_TEXT, ...SEALED_EXCERPT },
+  // The same sealed halves inside a receipt's signed bytes, so a bridge cannot swap them.
+  receiptExcerpt: receipt("needs_human", "waiting_on_human", null, 42, 20, 3, null, SEALED_EXCERPT),
 };
 
 /** Retries `attempt` until it answers with something, or gives up after two seconds. */
@@ -133,7 +202,12 @@ async function until(attempt) {
 
 async function roundTrip() {
   const bridge = spawn(process.execPath, [join(HERE, "bridge.mjs")], {
-    env: { ...process.env, PORT: String(PORT), HOST: "127.0.0.1" },
+    env: {
+      ...process.env,
+      PORT: String(PORT),
+      HOST: "127.0.0.1",
+      STATUS_KEY: STATUS_KEY.toString("hex"),
+    },
     stdio: ["ignore", "pipe", "inherit"],
   });
   // The spawn is outside the `try`, so the `finally` alone does not cover it. The bridge must not
@@ -173,11 +247,25 @@ async function roundTrip() {
 
     // 2. The page reads the status. Retried, because the parked poll's body may not be read yet.
     const status = await until(async () => {
-      const body = await (await fetch(`${base}status`)).json();
+      const body = await (await fetch(`${base}status`, { headers: statusHeaders() })).json();
       return body.receipt === null ? null : body;
     });
     check(status.receipt?.state === "needs_human", "the page sees the state Toglet reported");
     check(status.receipt?.mac === fixtures.receipt.mac, "the receipt is relayed byte for byte");
+
+    // 2b. The three ways a read must be refused. Without these the endpoint could be wide open
+    //     and every check above would still pass.
+    const unsigned = await fetch(`${base}status`);
+    check(unsigned.status === 401, "an unsigned status read is refused");
+
+    const forged = statusHeaders();
+    forged["x-toglet-mac"] = forged["x-toglet-mac"].replace(/^./, (c) => (c === "0" ? "1" : "0"));
+    const badMac = await fetch(`${base}status`, { headers: forged });
+    check(badMac.status === 401, "a status read signed with the wrong key is refused");
+
+    const old = Math.floor(Date.now() / 1000) - 16 * 60;
+    const stale = await fetch(`${base}status`, { headers: statusHeaders(old) });
+    check(stale.status === 401, "a correctly signed but stale status read is refused");
 
     // 3. The page delivers a signed command, which wakes the parked poll.
     const queued = await fetch(`${base}command`, {

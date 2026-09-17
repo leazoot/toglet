@@ -35,6 +35,25 @@
   composes: primary from "../notify/NotifySection.module.css";
 }
 
+/* The paired-view actions as filled wells, so they read as pressable rather than as the status
+   line above them. Reused wholesale from the notify sheet: this app separates a destructive
+   action by distance, not by colour, and inventing a danger colour here would be a new style. */
+.rowActions {
+  composes: rowActions from "../notify/NotifySection.module.css";
+}
+
+.chip {
+  composes: chip from "../notify/NotifySection.module.css";
+}
+
+.chipPrimary {
+  composes: chipPrimary from "../notify/NotifySection.module.css";
+}
+
+.chipRemove {
+  composes: chipRemove from "../notify/NotifySection.module.css";
+}
+
 .connection {
   margin: 2px 0 4px;
 }
@@ -79,6 +98,25 @@
 .meta {
   composes: meta from "../notify/NotifySection.module.css";
   margin-top: 1px;
+}
+
+/* The bridge's status key, shown masked. Deliberately not selectable: selecting it would copy the
+   asterisks, which looks like having the key and is not - the copy button is the only way out. */
+.key {
+  display: block;
+  margin-top: 6px;
+  font-family: var(--tg-font-mono);
+  font-size: var(--tg-text-footer-size);
+  line-height: 1.5;
+  color: var(--tg-text-secondary);
+}
+
+/* The generated secret, which has to be read off the screen character by character and typed into
+   a phone. `.key` above is sized to be recognised at a glance, which is not the same job. */
+.handoverKey {
+  composes: key;
+  font-size: var(--tg-text-account-size);
+  color: var(--tg-text-primary);
 }
 
 /* A one-line footnote: never wraps. */

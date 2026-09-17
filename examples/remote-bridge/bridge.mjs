@@ -3,12 +3,23 @@
 //
 //   POST /toglet   Toglet's poll. Carries a signed status receipt; answers with at most one
 //                  queued command, holding the request up to 25 seconds when there is none.
-//   GET  /status   The page reads what Toglet last said.
+//   GET  /status   The page reads what Toglet last said. Authenticated - see below.
 //   POST /command  The page queues a signed command for Toglet to collect.
 //
-// It holds no secret: it cannot sign a command and does not verify receipts. Everything is in
-// memory, so a restart drops uncollected commands.
+// It cannot sign a command and does not verify receipts, so a bridge that is taken over still
+// cannot forge one. Everything is in memory, so a restart drops uncollected commands.
+//
+// What it does hold is a *read key*: `/status` returns the last receipt, and that receipt may
+// carry a sealed excerpt of the session, so handing it to whoever asks is a leak. The read key
+// is derived from the shared secret one-way -
+//
+//     STATUS_KEY = SHA-256("toglet-remote/2 status" + <the shared secret>)
+//
+// - so it authenticates a reader without letting this machine sign a command or open the
+// excerpt, each of which uses a different key. Derive it on your own computer and put only the
+// result here; the shared secret itself must never reach this machine.
 
+import { createHmac, timingSafeEqual } from "node:crypto";
 import { createServer } from "node:http";
 
 const PORT = Number(process.env.PORT ?? 8787);
@@ -22,6 +33,36 @@ const COMMAND_TTL_MS = 15 * 60 * 1000;
 
 /** One bridge serves one person; a bounded queue cannot be flooded. */
 const MAX_QUEUED = 8;
+
+/** Hex of SHA-256("toglet-remote/2 status" + secret). Derive it on your own machine. */
+const STATUS_KEY = (process.env.STATUS_KEY ?? "").trim().toLowerCase();
+
+/** The bytes a `/status` request signs. Its own kind, so it can never pass as a command. */
+const statusBytes = (timestamp) => ["toglet-remote/2", "status", String(timestamp)].join("\n");
+
+/**
+ * Whether this request may read the last receipt.
+ *
+ * Refuses rather than falling back to open access when no key is configured: an unauthenticated
+ * `/status` is exactly the hole this exists to close, and a silent fallback would reopen it on
+ * every upgrade.
+ */
+function mayRead(request) {
+  if (!/^[0-9a-f]{64}$/.test(STATUS_KEY)) return "unconfigured";
+
+  const timestamp = Number(request.headers["x-toglet-ts"]);
+  const offered = String(request.headers["x-toglet-mac"] ?? "").toLowerCase();
+  if (!Number.isFinite(timestamp) || !/^[0-9a-f]{64}$/.test(offered)) return "unauthorized";
+  if (Math.abs(Date.now() - timestamp * 1000) > COMMAND_TTL_MS) return "unauthorized";
+
+  const expected = createHmac("sha256", Buffer.from(STATUS_KEY, "hex"))
+    .update(statusBytes(timestamp))
+    .digest();
+  const given = Buffer.from(offered, "hex");
+  // Lengths are equal by the shape check above, but timingSafeEqual throws if they ever differ.
+  if (given.length !== expected.length) return "unauthorized";
+  return timingSafeEqual(given, expected) ? "ok" : "unauthorized";
+}
 
 /** The last receipt Toglet sent, relayed to the page verbatim. */
 let lastReceipt = null;
@@ -63,7 +104,9 @@ function send(response, status, body) {
     "content-length": Buffer.byteLength(text),
     // The page may be served from another origin.
     "access-control-allow-origin": "*",
-    "access-control-allow-headers": "content-type",
+    // Without the two auth headers here the browser blocks every `/status` read, and it looks
+    // exactly like a wrong key.
+    "access-control-allow-headers": "content-type, x-toglet-ts, x-toglet-mac",
   });
   response.end(text);
 }
@@ -120,6 +163,19 @@ const server = createServer((request, response) => {
 
   // ---- the page: what did Toglet last say? ------------------------------------------------
   if (request.method === "GET" && url.pathname === "/status") {
+    const verdict = mayRead(request);
+    if (verdict === "unconfigured") {
+      send(response, 503, {
+        error: "no STATUS_KEY configured",
+        hint: 'derive it on your own machine: SHA-256("toglet-remote/2 status" + your secret)',
+      });
+      return;
+    }
+    if (verdict !== "ok") {
+      // Says nothing about which half was wrong, and never echoes what was offered.
+      send(response, 401, { error: "unauthorized" });
+      return;
+    }
     send(response, 200, {
       v: 1,
       receipt: lastReceipt,
@@ -167,4 +223,7 @@ server.listen(PORT, HOST, () => {
   process.stdout.write(`bridge listening on http://${HOST}:${port}\n`);
   process.stdout.write("  Toglet posts to /toglet, the page uses /status and /command\n");
   process.stdout.write("  in memory only; put https in front of it before using it for real\n");
+  if (!/^[0-9a-f]{64}$/.test(STATUS_KEY)) {
+    process.stdout.write("  WARNING: STATUS_KEY is not set - /status will refuse every read\n");
+  }
 });

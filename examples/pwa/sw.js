@@ -1,7 +1,7 @@
 // Makes the page installable and able to open offline. Only the shell is cached: status and
 // commands must never be served from a cache.
 
-const SHELL = "toglet-remote-v1";
+const SHELL = "toglet-remote-v2";
 const FILES = ["./", "./index.html", "./app.js", "./icon.svg", "./manifest.webmanifest"];
 
 self.addEventListener("install", (event) => {

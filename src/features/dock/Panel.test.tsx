@@ -62,6 +62,7 @@ function panel(overrides: Partial<PanelProps> = {}) {
     autorun: null,
     autorunBusy: false,
     autorunFailure: null,
+    resets: null,
     onAutoRunControl: () => undefined,
     ...overrides,
   };
@@ -199,6 +200,7 @@ describe("the panel", () => {
         autorun={null}
         autorunBusy={false}
         autorunFailure={null}
+        resets={null}
         onAutoRunControl={() => undefined}
       />,
     );

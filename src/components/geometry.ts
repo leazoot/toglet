@@ -16,3 +16,10 @@ export const RING_FORM_GEOMETRY = {
   innerRadius: 11,
   stroke: 3,
 } as const;
+
+/**
+ * The reset banner's gauge: ø14, r=5.5, stroke 1.5. Circumference 2π × 5.5 = 34.56. The arc is
+ * the share of the average reset interval that has passed - two figures the feed gives, drawn
+ * together; it is not a countdown.
+ */
+export const RESET_GAUGE_GEOMETRY = { box: 14, radius: 5.5, stroke: 1.5 } as const;

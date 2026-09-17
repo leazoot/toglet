@@ -11,4 +11,4 @@ pub use document::{
     CURRENT_SCHEMA_VERSION, CodexConfigState, LoadProblem, MetadataDocument, migrate,
 };
 pub use settings::{AppSettings, DockEdge, DockShape, Language, SwitchVerified, Theme};
-pub use store::{LoadOutcome, MetadataStore};
+pub use store::{LoadOutcome, MetadataStore, read_schema_version};

@@ -16,8 +16,10 @@ pub mod notify;
 pub mod process;
 pub mod quota;
 pub mod remote;
+pub mod resets;
 pub mod storage;
 pub mod switching;
+pub mod text;
 pub mod window;
 
 /// Starts the desktop shell.
@@ -68,6 +70,11 @@ pub fn run() -> Result<(), StartupFailure> {
             // Must start after `Remote` (settings) and `AutoRun` (state machine) are managed.
             // With remote control off, the default, it sleeps and nothing leaves the machine.
             commands::remote_poll::start(app.handle().clone());
+            // Off by default; while off the thread only looks at the switch once a minute.
+            let (resets, woken) =
+                commands::resets::Resets::load(app.state::<commands::AppState>().data_directory());
+            app.manage(resets);
+            commands::resets_poll::start(app.handle().clone(), woken);
             dock_main_window(app);
             // Best effort: a tray that could not be created is logged; the bar still works.
             drop(window::install_tray(app.handle()));
@@ -99,6 +106,7 @@ pub fn run() -> Result<(), StartupFailure> {
             commands::autorun::pause_autorun,
             commands::autorun::resume_autorun,
             commands::autorun::cancel_autorun,
+            commands::autorun::send_autorun,
             commands::notify::read_notify_channels,
             commands::notify::save_notify_channel,
             commands::notify::remove_notify_channel,
@@ -107,6 +115,9 @@ pub fn run() -> Result<(), StartupFailure> {
             commands::remote::save_remote,
             commands::remote::forget_remote,
             commands::remote::remote_secret_minimum,
+            commands::resets::read_resets,
+            commands::resets::save_resets,
+            commands::resets::open_resets_site,
             startup_recovery,
         ])
         .run(tauri::generate_context!())

@@ -110,6 +110,16 @@ describe("the settings sheet", () => {
           lastCommand: null,
         });
       }
+      if (command === "read_resets") {
+        return Promise.resolve({
+          enabled: false,
+          channelIds: [],
+          status: null,
+          fetchedAt: null,
+          stale: false,
+          lastError: null,
+        });
+      }
       return Promise.resolve(undefined);
     });
   });

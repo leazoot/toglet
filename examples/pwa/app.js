@@ -1,7 +1,10 @@
 // Toglet Remote. One screen, and one rule: never show a button that would not work.
 //
-// A task waiting on a Codex approval cannot be continued from here - Toglet would re-read the
-// thread and land back on "needs you" - so in that state the continue button does not exist.
+// A task waiting on a Codex approval still cannot be *continued* from here - `resume` would
+// re-read the thread and land back on "needs you" - so the continue button does not exist in
+// that state. What does work there is answering: a sentence interrupts the turn holding the
+// question and starts a fresh one with those words. Hence the composer, and hence "send" being
+// the primary action on exactly the screen where "continue" is absent.
 //
 // Wire format: src-tauri/src/remote/envelope.rs.
 
@@ -43,9 +46,9 @@ const COPY = {
 
     needsYou: "Waiting for you",
     needsYouWhy: "Codex is waiting for your input",
-    atMachineLead: "This has to be handled at the computer.",
-    atMachineTail:
-      "This step needs you to confirm or type something in Codex, so it cannot be continued from your phone.",
+    askLead: "Answer from here",
+    askTail:
+      "Your reply starts a fresh turn with those words; the question Codex is holding is dropped.",
 
     paused: "Paused",
     pausedWhy: "Paused from your phone",
@@ -54,6 +57,11 @@ const COPY = {
     unbound: "No task bound",
 
     unreachableWhy: "Cannot reach the Toglet Bridge",
+    unauthorizedWhy: "The bridge did not accept this key; its STATUS_KEY may be out of date",
+    notFoundWhy: "No bridge at this address",
+    noStatusKeyWhy: "The bridge has no STATUS_KEY installed yet",
+    garbledWhy: "The bridge's reply could not be read; a proxy may be in the way",
+    refusedWhy: (code) => `The bridge did not return a state (${code})`,
     neverCameWhy: "The bridge is connected, but no state has arrived from Toglet",
     staleWhy: "No recent state from the computer",
     unboundWhy: "No task is bound on the computer",
@@ -76,6 +84,23 @@ const COPY = {
     retry: "Retry",
 
     trace: "CONTINUE REQUEST · SENDING",
+    traceSend: "REPLY · SENDING",
+
+    composerHint: "Write a reply\u2026",
+    send: "Send",
+    phrases: "Quick phrases",
+    phrasesTag: "this phone",
+    phrasesFine: "One per line. Stored on this phone only - they never reach the bridge.",
+    counter: (n, max) => `${n} / ${max}`,
+
+    excerptHead: "CODEX LAST SAID",
+    excerptNone: "No content preview",
+    // Deliberately does not name a cause: a null excerpt means the switch is off, or the agent
+    // has not spoken this turn, or sealing failed - and the receipt cannot tell them apart.
+    excerptNoneWhy:
+      "Either the preview is turned off on the computer, or nothing new has been said this turn.",
+    excerptSealed: "Content preview could not be decrypted",
+    excerptSealedWhy: "The shared secret on this phone does not match the one on the computer.",
     delivered: "Sent",
     collected: "Received",
     applied: "Executed",
@@ -155,8 +180,8 @@ const COPY = {
 
     needsYou: "等待你的操作",
     needsYouWhy: "Codex 正在等待你的输入",
-    atMachineLead: "需要在电脑上处理。",
-    atMachineTail: "当前步骤需要你在 Codex 中确认或输入内容，暂不支持从手机继续。",
+    askLead: "在这里回答",
+    askTail: "你的回复会用这句话重新开始一轮；Codex 正等着的那个问题会被放弃。",
 
     paused: "已暂停",
     pausedWhy: "已从手机暂停",
@@ -165,6 +190,11 @@ const COPY = {
     unbound: "未绑定任务",
 
     unreachableWhy: "无法连接到 Toglet Bridge",
+    unauthorizedWhy: "Bridge 不接受这把密钥，它上面的 STATUS_KEY 可能是旧的",
+    notFoundWhy: "这个地址上没有 Bridge",
+    noStatusKeyWhy: "Bridge 上还没有装 STATUS_KEY",
+    garbledWhy: "读不出 Bridge 的回复，可能有代理挡在中间",
+    refusedWhy: (code) => `Bridge 没有给出状态（${code}）`,
     neverCameWhy: "Bridge 已连接，但尚未收到 Toglet 状态",
     staleWhy: "暂未收到电脑的最新状态",
     unboundWhy: "电脑上尚未绑定任务",
@@ -186,6 +216,21 @@ const COPY = {
     retry: "重试",
 
     trace: "继续请求 · 发送中",
+    traceSend: "回复 · 发送中",
+
+    composerHint: "写一句话\u2026",
+    send: "发送",
+    phrases: "快捷短语",
+    phrasesTag: "本机",
+    phrasesFine: "每行一条。只存在这台手机上，不会经过 Bridge。",
+    counter: (n, max) => `${n} / ${max}`,
+
+    excerptHead: "CODEX 最后说",
+    excerptNone: "暂无内容预览",
+    // 刻意不指明原因：回执里的 null 同时表示开关关着、agent 这一轮没说话、密封失败三件事。
+    excerptNoneWhy: "可能是电脑上没开启预览，也可能是这一轮还没有新消息。",
+    excerptSealed: "内容预览无法解密",
+    excerptSealedWhy: "这台手机上的共享密钥与电脑上的不一致。",
     delivered: "已发送",
     collected: "已接收",
     applied: "已执行",
@@ -272,8 +317,10 @@ const BUSY_STATES = new Set([
  * Maps a receipt to what the screen shows. `why` separates the four causes of "unknown", so the
  * page does not blame the network when the bridge answered but Toglet never posted.
  */
-function shape(receipt, stale, reachable) {
-  if (reachable === false) return { kind: "unknown", why: "unreachable" };
+function shape(receipt, stale, reachable, failure = null) {
+  // A refusal carries its own reason; only a request that never got an answer is "unreachable".
+  if (reachable === false)
+    return { kind: "unknown", why: failure?.why ?? "unreachable", code: failure?.code ?? null };
   if (receipt === null) return { kind: "unknown", why: "neverCame" };
   if (stale) return { kind: "unknown", why: "stale" };
 
@@ -328,11 +375,11 @@ function randomHex(bytes) {
  * The exact byte string Toglet signs. Fields joined by newlines in a fixed order - not
  * canonicalised JSON, which differs between implementations in key order and escaping.
  */
-async function envelope(action, receipt, counter, secret) {
+async function envelope(action, receipt, counter, secret, text = "") {
   const nonce = randomHex(16);
   const issuedAt = Math.floor(Date.now() / 1000);
   const body = {
-    v: 1,
+    v: 2,
     kind: "command",
     action,
     sessionId: receipt.sessionId,
@@ -342,7 +389,7 @@ async function envelope(action, receipt, counter, secret) {
     issuedAt,
   };
   const signed = [
-    "toglet-remote/1",
+    "toglet-remote/2",
     "command",
     action,
     body.sessionId,
@@ -350,8 +397,132 @@ async function envelope(action, receipt, counter, secret) {
     String(counter),
     nonce,
     String(issuedAt),
+    // Last, and always signed - empty for the argument-free actions. Signing it is what stops
+    // the bridge rewriting the one thing on this path worth rewriting.
+    text,
   ].join("\n");
-  return { ...body, mac: await sign(secret, signed) };
+  const mac = await sign(secret, signed);
+  // Absent and empty sign identically, so only `send` carries the field at all.
+  if (text !== "") body.text = text;
+  return { ...body, mac };
+}
+
+// ---------------------------------------------------------------- the excerpt
+//
+// HMAC proves who sent a receipt but hides nothing inside it, and the bridge is untrusted: its
+// status endpoint hands the last receipt to whoever asks. So the one piece of session content
+// allowed out travels sealed, under a key derived from the shared secret but separated from the
+// one that signs it. This mirrors src-tauri/src/remote/crypt.rs; the two must agree byte for byte.
+
+/** Domain separator. The bytes that verify a receipt are never the bytes that open one. */
+const EXCERPT_DOMAIN = "toglet-remote/2 excerpt";
+
+/**
+ * The key the bridge checks a `/status` read against, derived one-way from the shared secret.
+ *
+ * The bridge needs to authenticate readers - a receipt can carry a sealed excerpt, so handing it
+ * to whoever asks is a leak - but it must not become able to forge a command. A separate derived
+ * key gives it exactly the first and none of the second: SHA-256 does not run backwards, and the
+ * command MAC uses the raw secret this machine never sees.
+ */
+const STATUS_DOMAIN = "toglet-remote/2 status";
+
+async function statusHeaders(secret) {
+  const issuedAt = Math.floor(Date.now() / 1000);
+  const material = new TextEncoder().encode(STATUS_DOMAIN + secret);
+  const raw = await crypto.subtle.digest("SHA-256", material);
+  const key = await crypto.subtle.importKey("raw", raw, { name: "HMAC", hash: "SHA-256" }, false, [
+    "sign",
+  ]);
+  // Its own kind in the signed bytes, so a status MAC can never be replayed as a command.
+  const signed = ["toglet-remote/2", "status", String(issuedAt)].join("\n");
+  const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(signed));
+  const mac = [...new Uint8Array(signature)]
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+  return { "x-toglet-ts": String(issuedAt), "x-toglet-mac": mac };
+}
+
+/** Lower- or upper-case hex of even length; `null` for anything else. */
+function fromHex(hex) {
+  if (typeof hex !== "string" || hex.length === 0 || hex.length % 2 !== 0) return null;
+  if (!/^[0-9a-fA-F]+$/.test(hex)) return null;
+  const out = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < out.length; i += 1) {
+    out[i] = Number.parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+  }
+  return out;
+}
+
+/**
+ * The excerpt in clear, or `null` when it does not authenticate. Never throws and never guesses:
+ * GCM checks the tag before returning anything, so a tampered value yields nothing at all rather
+ * than plausible-looking rubbish.
+ */
+async function openExcerpt(secret, ciphertextHex, nonceHex) {
+  const ciphertext = fromHex(ciphertextHex);
+  const nonce = fromHex(nonceHex);
+  if (ciphertext === null || nonce === null || nonce.length !== 12) return null;
+  try {
+    // UTF-8 of a concatenation is the concatenation of the encodings, so this is byte-identical
+    // to Rust hashing the separator and the secret in two updates.
+    const material = new TextEncoder().encode(EXCERPT_DOMAIN + secret);
+    const digest = await crypto.subtle.digest("SHA-256", material);
+    const key = await crypto.subtle.importKey("raw", digest, { name: "AES-GCM" }, false, [
+      "decrypt",
+    ]);
+    const plain = await crypto.subtle.decrypt({ name: "AES-GCM", iv: nonce }, key, ciphertext);
+    return new TextDecoder().decode(plain);
+  } catch {
+    // Failing to authenticate is expected behaviour on an untrusted path, not a fault.
+    return null;
+  }
+}
+
+/**
+ * What the excerpt block should say. A `null` field is NOT reported as "preview is off": it also
+ * means the agent has not spoken this turn, and the receipt cannot tell those apart (BACKLOG-051).
+ * Claiming a cause the data does not carry is the same lie as an empty string posing as silence.
+ */
+async function readExcerpt(secret, receipt) {
+  const ciphertext = receipt?.excerptCiphertext ?? null;
+  const nonce = receipt?.excerptNonce ?? null;
+  if (ciphertext === null || nonce === null) return { kind: "none" };
+  const text = await openExcerpt(secret, ciphertext, nonce);
+  return text === null ? { kind: "sealed" } : { kind: "text", text };
+}
+
+// ---------------------------------------------------------------- quick phrases (this phone only)
+//
+// Stored here and nowhere else. They never enter a receipt or a command envelope - a phrase is
+// just ordinary text once it is sent - so adding them cost the wire format nothing.
+
+const PHRASE_STORE = "toglet.remote.phrases";
+const DEFAULT_PHRASES = ZH
+  ? ["继续", "按你的推荐来", "先跑一遍测试"]
+  : ["Continue", "Go with your recommendation", "Run the tests first"];
+
+function phrases() {
+  try {
+    const held = JSON.parse(localStorage.getItem(PHRASE_STORE) ?? "null");
+    if (!Array.isArray(held)) return DEFAULT_PHRASES;
+    const kept = held.filter((line) => typeof line === "string" && line.trim() !== "");
+    return kept.length === 0 ? DEFAULT_PHRASES : kept;
+  } catch {
+    return DEFAULT_PHRASES;
+  }
+}
+
+function savePhrases(text) {
+  const lines = text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line !== "");
+  try {
+    localStorage.setItem(PHRASE_STORE, JSON.stringify(lines));
+  } catch {
+    // A phone with storage blocked still works; it just falls back to the defaults.
+  }
 }
 
 // ---------------------------------------------------------------- state
@@ -362,24 +533,43 @@ let model = {
   receipt: null,
   ageSeconds: null,
   reachable: null,
+  /** Why the last read was refused - `{ why, code }` - or `null` for none and for a dead network. */
+  failure: null,
   /** `{ counter, action, at, collected, done }` while a command is on its way. */
   inFlight: null,
   /** Set for one render after the bridge comes back, to play the Live Core's scan. */
   reconnected: false,
+  /** What is typed but not yet sent. Held here so a redraw cannot throw it away. */
+  draft: "",
+  /** `{ kind: "none" | "sealed" | "text", text? }` - decrypting is async, drawing is not. */
+  excerpt: { kind: "none" },
 };
 
 async function refresh() {
   const paired = pairing();
   if (paired === null) return;
   const was = model.reachable;
+  // Whether an answer came back at all, and what it said. Without these the failure below cannot
+  // be told apart from a dead network, and each of them is a different repair: a stale key on the
+  // bridge, a wrong address, a bridge with no key installed. Collapsing them into one sentence is
+  // what made a working deployment look broken.
+  let answered = false;
+  let code = 0;
   try {
-    const response = await fetch(new URL("status", paired.endpoint), { cache: "no-store" });
-    if (!response.ok) throw new Error(String(response.status));
+    const response = await fetch(new URL("status", paired.endpoint), {
+      cache: "no-store",
+      headers: await statusHeaders(paired.secret),
+    });
+    answered = true;
+    code = response.status;
+    if (!response.ok) throw new Error("refused");
     const body = await response.json();
     model.receipt = body.receipt ?? null;
     model.ageSeconds = body.ageSeconds;
     model.reachable = true;
+    model.failure = null;
     model.reconnected = was === false;
+    model.excerpt = await readExcerpt(paired.secret, model.receipt);
 
     // The third node lights only when Toglet says so - never before.
     const last = model.receipt?.lastCommand ?? null;
@@ -396,16 +586,31 @@ async function refresh() {
     }
   } catch {
     model.reachable = false;
+    model.failure = answered ? refusal(code) : null;
     model.reconnected = false;
   }
   render();
 }
 
-async function deliver(action) {
+/**
+ * Why a `/status` read was refused, from its status code. `401` is the one worth spelling out:
+ * the bridge holds a STATUS_KEY derived from a different secret, and the usual cause is a secret
+ * regenerated on the computer without redeploying the bridge.
+ */
+function refusal(code) {
+  if (code === 401) return { why: "unauthorized", code };
+  if (code === 404) return { why: "notFound", code };
+  if (code === 503) return { why: "noStatusKey", code };
+  // An answer that arrived and could not be read: most often a proxy serving its own page.
+  if (code >= 200 && code < 300) return { why: "garbled", code };
+  return { why: "refused", code };
+}
+
+async function deliver(action, text = "") {
   const paired = pairing();
   if (paired === null || model.receipt === null) return;
   const counter = (model.receipt.cursor ?? 0) + 1;
-  const body = await envelope(action, model.receipt, counter, paired.secret);
+  const body = await envelope(action, model.receipt, counter, paired.secret, text);
   model.inFlight = { counter, action, at: new Date(), collected: false, done: null };
   render();
   try {
@@ -417,6 +622,8 @@ async function deliver(action) {
   } catch {
     model.inFlight = null;
     model.reachable = false;
+    // The request itself never completed, so there is no refusal to report.
+    model.failure = null;
   }
   render();
   void refresh();
@@ -655,17 +862,26 @@ function words(view) {
     case "unpaired":
       return [T.pairTitle, T.pairIntro];
     default:
-      return view.why === "unbound"
-        ? [T.unbound, T.unboundWhy]
-        : [T.unavailable, UNKNOWN_WHY[view.why] ?? T.unreachableWhy];
+      return view.why === "unbound" ? [T.unbound, T.unboundWhy] : [T.unavailable, unknownWhy(view)];
   }
 }
 
 const UNKNOWN_WHY = {
   unreachable: T.unreachableWhy,
+  unauthorized: T.unauthorizedWhy,
+  notFound: T.notFoundWhy,
+  noStatusKey: T.noStatusKeyWhy,
+  garbled: T.garbledWhy,
+  refused: T.refusedWhy,
   neverCame: T.neverCameWhy,
   stale: T.staleWhy,
 };
+
+/** The line under "state unavailable". One reason takes the status code, so it is a function. */
+function unknownWhy(view) {
+  const line = UNKNOWN_WHY[view.why] ?? T.unreachableWhy;
+  return typeof line === "function" ? line(view.code) : line;
+}
 
 /** What a screen reader hears for the Live Core. */
 function spoken(view) {
@@ -772,7 +988,7 @@ function trace() {
   box.append(element("div", "rule"));
 
   const head = element("div", "trace-head");
-  head.append(element("span", "", T.trace));
+  head.append(element("span", "", model.inFlight.action === "send" ? T.traceSend : T.trace));
   head.append(element("time", "", stamp(model.inFlight.at)));
   box.append(head);
 
@@ -893,6 +1109,92 @@ function cancelButton(wide) {
   return button;
 }
 
+// ---------------------------------------------------------------- composer
+//
+// Where a sentence is actually carried out, mirroring `machine.rs::apply_steer`: waiting on a
+// person, paused, or a round that has ended. A running turn cannot be steered and a quota wait
+// would fail on arrival, so those screens have no composer at all - not a disabled one.
+
+const COMPOSER_KINDS = new Set(["needsYou", "stopped", "paused"]);
+
+/** The protocol's own limit, from src-tauri/src/remote/envelope.rs. */
+const MAX_TEXT_CHARS = 2000;
+
+/** Only shown near the ceiling; a counter on an empty box is noise. */
+const COUNTER_FROM = 1600;
+
+function excerptBlock() {
+  const surface = element("div", "surface excerpt");
+  const head = element("div", "surface-head");
+  head.append(element("span", "", T.excerptHead));
+  surface.append(head);
+
+  const state = model.excerpt ?? { kind: "none" };
+  if (state.kind === "text") {
+    surface.append(element("p", "excerpt-body", state.text));
+    return surface;
+  }
+  const sealed = state.kind === "sealed";
+  surface.append(
+    element("p", "excerpt-empty", sealed ? T.excerptSealed : T.excerptNone),
+    element("p", "excerpt-why", sealed ? T.excerptSealedWhy : T.excerptNoneWhy),
+  );
+  return surface;
+}
+
+/** Quick phrases send on the press; they are ordinary text once sent. */
+function chipRow() {
+  const row = element("div", "chips");
+  for (const phrase of phrases()) {
+    const chip = element("button", "chip", phrase);
+    chip.addEventListener("click", () => {
+      model.draft = "";
+      void deliver("send", phrase);
+    });
+    row.append(chip);
+  }
+  return row;
+}
+
+function grow(box) {
+  box.style.height = "auto";
+  box.style.height = `${Math.min(box.scrollHeight, 96)}px`;
+}
+
+function paintCounter(node) {
+  const length = model.draft.length;
+  node.hidden = length < COUNTER_FROM;
+  node.textContent = T.counter(length, MAX_TEXT_CHARS);
+  node.classList.toggle("full", length >= MAX_TEXT_CHARS);
+}
+
+function composer() {
+  const wrap = element("div", "composer");
+  const box = document.createElement("textarea");
+  box.className = "composer-input";
+  box.placeholder = T.composerHint;
+  box.rows = 1;
+  box.maxLength = MAX_TEXT_CHARS;
+  box.spellcheck = false;
+  // Restored rather than reset: the excerpt can change under a half-typed reply.
+  box.value = model.draft;
+
+  const count = element("span", "counter");
+  box.addEventListener("input", () => {
+    const had = model.draft.trim() !== "";
+    model.draft = box.value.slice(0, MAX_TEXT_CHARS);
+    grow(box);
+    paintCounter(count);
+    // Only when the send button's existence changes, which is the one thing a redraw settles.
+    if (had !== (model.draft.trim() !== "")) render();
+  });
+
+  wrap.append(box, count);
+  paintCounter(count);
+  requestAnimationFrame(() => grow(box));
+  return wrap;
+}
+
 // ---------------------------------------------------------------- dock
 
 /** Class and words for the sync line. It says something different on every poll. */
@@ -940,6 +1242,8 @@ function dock(view) {
           reachable: null,
           inFlight: null,
           reconnected: false,
+          draft: "",
+          excerpt: { kind: "none" },
         };
         render();
       });
@@ -960,6 +1264,19 @@ function dock(view) {
         element("p", "hint", view.kind === "waiting" ? T.quotaNothing : T.nothingToContinue),
       );
     }
+  }
+
+  // A sentence, on exactly the screens where Toglet would carry one out. On "needs you" it is
+  // the primary action, because "continue" is absent there; elsewhere "continue" is primary and
+  // this sits below it, so the screen never has two solid Mint buttons.
+  const draft = model.draft.trim();
+  if (model.inFlight === null && COMPOSER_KINDS.has(view.kind) && draft !== "") {
+    const send = element("button", view.kind === "needsYou" ? "primary" : "secondary wide", T.send);
+    send.addEventListener("click", () => {
+      model.draft = "";
+      void deliver("send", draft);
+    });
+    bar.append(send);
   }
 
   if (view.kind === "paused") {
@@ -1013,10 +1330,28 @@ function pairStage() {
   const endpoint = field(T.bridge, "url", "https://…");
   const secret = field(T.secret, "password", "", T.writeOnly);
   if (held !== null) endpoint.input.value = held.endpoint;
-  fields.append(endpoint.row, secret.row);
+  const lines = phrasesField();
+  fields.append(endpoint.row, secret.row, lines.row);
   stage.append(fields);
-  stage.append(element("p", "fine", T.pairFine));
-  return { stage, endpoint: endpoint.input, secret: secret.input };
+  stage.append(element("p", "fine", T.pairFine), element("p", "fine", T.phrasesFine));
+  return { stage, endpoint: endpoint.input, secret: secret.input, phrases: lines.input };
+}
+
+/** The quick phrases, edited where the rest of this phone's settings live. */
+function phrasesField() {
+  const row = element("label", "field tall");
+  row.append(icon(19, CHEVRON));
+  const body = element("div", "field-body");
+  body.append(element("span", "", T.phrases));
+  const box = document.createElement("textarea");
+  box.className = "lines";
+  box.rows = 3;
+  box.spellcheck = false;
+  box.autocapitalize = "off";
+  box.value = phrases().join("\n");
+  body.append(box);
+  row.append(body, element("span", "tag", T.phrasesTag));
+  return { row, input: box };
 }
 
 function pairDock(inputs) {
@@ -1025,8 +1360,12 @@ function pairDock(inputs) {
   save.addEventListener("click", () => {
     const held = pairing();
     const address = inputs.endpoint.value.trim();
-    const key = inputs.secret.value === "" ? (held?.secret ?? "") : inputs.secret.value;
+    // Trimmed like the address above: a secret pasted with a trailing newline would
+    // otherwise differ from the one Toglet stored, which trims, and every MAC would fail.
+    const typed = inputs.secret.value.trim();
+    const key = typed === "" ? (held?.secret ?? "") : typed;
     if (address === "" || key.length < 16) return;
+    savePhrases(inputs.phrases.value);
     localStorage.setItem(
       STORE,
       JSON.stringify({ endpoint: address.endsWith("/") ? address : `${address}/`, secret: key }),
@@ -1090,7 +1429,7 @@ function render() {
   // A receipt that is no longer current must not be shown as the current state.
   const stale =
     model.reachable === false || (model.ageSeconds !== null && model.ageSeconds > staleAfter());
-  const view = shape(model.receipt, stale, model.reachable);
+  const view = shape(model.receipt, stale, model.reachable, model.failure);
   app.classList.toggle("offline", view.kind === "unknown" && model.reachable === false);
 
   const flight = model.inFlight;
@@ -1161,7 +1500,7 @@ function contextKey(view) {
   if (model.inFlight !== null) {
     return `trace|${model.inFlight.counter}|${model.inFlight.collected ? 1 : 0}|${model.inFlight.done ?? ""}`;
   }
-  if (view.kind === "needsYou") return "needsYou";
+  if (COMPOSER_KINDS.has(view.kind)) return `ask|${view.kind}|${model.excerpt.kind}`;
   if (view.kind === "unknown") return `unknown|${view.why}|${model.receipt === null ? 0 : 1}`;
   return "none";
 }
@@ -1173,28 +1512,14 @@ function buildContext(view) {
     context.append(trace());
     return context;
   }
-  if (view.kind === "needsYou") {
-    context.append(element("div", "rule"));
-    const block = element("div", "at-machine");
-    const screen = svgNode("svg", {
-      width: 17,
-      height: 17,
-      viewBox: "0 0 24 24",
-      fill: "none",
-      stroke: "var(--t2)",
-      "stroke-width": 1.75,
-      "stroke-linecap": "round",
-      "stroke-linejoin": "round",
-    });
-    screen.append(
-      svgNode("rect", { x: 2.5, y: 4, width: 19, height: 13, rx: 2 }),
-      svgNode("path", { d: "M8.5 20.5h7" }),
-    );
-    block.append(screen);
-    const lines = element("div");
-    lines.append(element("p", "lead", T.atMachineLead), element("p", "tail", T.atMachineTail));
-    block.append(lines);
-    context.append(block);
+  if (COMPOSER_KINDS.has(view.kind)) {
+    context.append(element("div", "rule"), excerptBlock());
+    if (view.kind === "needsYou") {
+      const ask = element("div", "ask");
+      ask.append(element("p", "lead", T.askLead), element("p", "tail", T.askTail));
+      context.append(ask);
+    }
+    context.append(chipRow(), composer());
     return context;
   }
   if (view.kind === "unknown") {
@@ -1212,7 +1537,13 @@ function buildContext(view) {
       context.append(surface);
     }
     context.append(
-      element("p", "aside", view.why === "neverCame" ? T.checkAddress : T.noStateNoAction),
+      // A wrong address earns the same advice as a bridge that answers but never hears from
+      // Toglet: both are fixed by checking what was typed, not by waiting.
+      element(
+        "p",
+        "aside",
+        view.why === "neverCame" || view.why === "notFound" ? T.checkAddress : T.noStateNoAction,
+      ),
     );
   }
   return context;
@@ -1229,7 +1560,10 @@ function dockKey(view) {
         : view.kind === "waiting" || view.kind === "running"
           ? "hint"
           : "bare";
-  return `${view.kind}|${main}`;
+  // Whether there is something to send, not what it says: the button appears on the first
+  // character and vanishes on the last, and is never present-but-disabled.
+  const sending = COMPOSER_KINDS.has(view.kind) && model.draft.trim() !== "" ? "send" : "-";
+  return `${view.kind}|${main}|${sending}`;
 }
 
 function home() {

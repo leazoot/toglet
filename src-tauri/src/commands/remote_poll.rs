@@ -38,8 +38,10 @@ pub fn start(app: AppHandle) {
         .spawn(move || {
             let mut guard = restored(&app);
             let mut backoff = Backoff::new();
+            // Set when a command has been handled and its outcome has not reached the phone yet.
+            let mut unsent = false;
             loop {
-                let wait = round(&app, &mut guard, &mut backoff);
+                let wait = round(&app, &mut guard, &mut backoff, &mut unsent);
                 thread::sleep(wait);
             }
         });
@@ -57,7 +59,7 @@ fn restored(app: &AppHandle) -> Guard {
 }
 
 /// One pass. Returns how long to wait before the next one.
-fn round(app: &AppHandle, guard: &mut Guard, backoff: &mut Backoff) -> Duration {
+fn round(app: &AppHandle, guard: &mut Guard, backoff: &mut Backoff, unsent: &mut bool) -> Duration {
     let remote = app.state::<Remote>();
     let autorun = app.state::<AutoRun>();
     let state = app.state::<AppState>();
@@ -75,16 +77,38 @@ fn round(app: &AppHandle, guard: &mut Guard, backoff: &mut Backoff) -> Duration 
         }
     }
 
-    let Some(interval) = poll::interval(config.enabled, plan.state, *backoff) else {
-        return DORMANT;
-    };
-
-    // Enabled but not yet paired: not an error, and not worth logging every round.
+    // Enabled but not yet paired: not an error, and not worth logging every round. Loaded before
+    // the interval decision, because the round that stops polling is the one that still owes the
+    // phone a receipt.
     let Ok(bridge) = load_bridge(state.secrets()) else {
         return DORMANT;
     };
 
-    let receipt = receipt_of(&config, &plan, interval);
+    let Some(interval) = poll::interval(config.enabled, plan.state, *backoff) else {
+        // A cancel ends the task, and the state it ends in is the state that stops polling - so
+        // the outcome would never be sent and the phone would wait for a result that cannot
+        // arrive. This is the round to send it from: the state has settled by now, which it had
+        // not when the command was handled.
+        if poll::owes_closing_receipt(config.enabled, plan.state, *unsent) {
+            let excerpt = sealed_excerpt(&config, &autorun, bridge.secret.as_bytes());
+            let receipt = receipt_of(&config, &plan, DORMANT, excerpt);
+            match tauri::async_runtime::block_on(poll::exchange(
+                &bridge.endpoint,
+                bridge.secret.as_bytes(),
+                &receipt,
+            )) {
+                // Sent: whatever the bridge had queued cannot be acted on in this state, and
+                // leaving the flag set would repeat this receipt every dormant round.
+                Ok(_) => *unsent = false,
+                Err(error) => log(&LogRecord::from_error("remote_poll_failed", &error)),
+            }
+        }
+        return DORMANT;
+    };
+
+    // Sealed here and nowhere else: the plaintext never leaves Rust.
+    let excerpt = sealed_excerpt(&config, &autorun, bridge.secret.as_bytes());
+    let receipt = receipt_of(&config, &plan, interval, excerpt);
     let answer = tauri::async_runtime::block_on(poll::exchange(
         &bridge.endpoint,
         bridge.secret.as_bytes(),
@@ -95,6 +119,8 @@ fn round(app: &AppHandle, guard: &mut Guard, backoff: &mut Backoff) -> Duration 
         Ok(Some(payload)) => payload,
         Ok(None) => {
             *backoff = backoff.after_success();
+            // The receipt just sent carried whatever outcome was stored, so nothing is owed.
+            *unsent = false;
             return interval;
         }
         Err(error) => {
@@ -104,6 +130,8 @@ fn round(app: &AppHandle, guard: &mut Guard, backoff: &mut Backoff) -> Duration 
         }
     };
     *backoff = backoff.after_success();
+    // The receipt sent above carried the previous outcome; this round's is owed from here on.
+    *unsent = false;
 
     handle(
         &remote,
@@ -114,6 +142,12 @@ fn round(app: &AppHandle, guard: &mut Guard, backoff: &mut Backoff) -> Duration 
         bridge.secret.as_bytes(),
         &payload,
     );
+
+    // Deliberately not decided here. A user event is handed to the driver without waiting for it
+    // to be applied, so reading the state back now can still show the state this command ended,
+    // which would judge the receipt unnecessary and lose it. The next round decides, by which
+    // time the state has settled.
+    *unsent = true;
     CONFIRM
 }
 
@@ -128,7 +162,12 @@ fn rebind(config: &mut RemoteConfig, plan: &AutoRunPlan) -> bool {
 }
 
 /// Toglet's status for the phone: codes and timestamps only, never sentences.
-fn receipt_of(config: &RemoteConfig, plan: &AutoRunPlan, next_poll: Duration) -> Receipt {
+fn receipt_of(
+    config: &RemoteConfig,
+    plan: &AutoRunPlan,
+    next_poll: Duration,
+    excerpt: Option<crate::remote::crypt::Sealed>,
+) -> Receipt {
     Receipt {
         device_id: config.device_id.clone(),
         session_id: config.session_id.clone(),
@@ -139,10 +178,35 @@ fn receipt_of(config: &RemoteConfig, plan: &AutoRunPlan, next_poll: Duration) ->
         cursor: config.cursor,
         next_poll_seconds: next_poll.as_secs(),
         resume_count: plan.resume_count,
+        excerpt_ciphertext: excerpt.as_ref().map(|sealed| sealed.ciphertext_hex.clone()),
+        excerpt_nonce: excerpt.as_ref().map(|sealed| sealed.nonce_hex.clone()),
         last_command: config
             .last_command
             .as_ref()
             .and_then(LastCommandRecord::to_envelope),
+    }
+}
+
+/// The agent's last message, sealed, or `None` when the user has the preview switched off,
+/// when the session has not been read yet, or when sealing failed.
+///
+/// A failure to seal is `None` rather than plaintext: the point of the field is that only the
+/// phone can read it.
+fn sealed_excerpt(
+    config: &RemoteConfig,
+    autorun: &AutoRun,
+    secret: &[u8],
+) -> Option<crate::remote::crypt::Sealed> {
+    if !config.share_excerpt {
+        return None;
+    }
+    let excerpt = autorun.agent_excerpt()?;
+    match crate::remote::crypt::seal(secret, &excerpt) {
+        Ok(sealed) => Some(sealed),
+        Err(error) => {
+            log(&LogRecord::from_error("remote_excerpt_not_sealed", &error));
+            None
+        }
     }
 }
 
@@ -177,7 +241,7 @@ fn handle(
         }
     };
 
-    let outcome = deliver(autorun, accepted.action);
+    let outcome = deliver(autorun, accepted.action, accepted.text.as_deref());
     guard::audit(Some(accepted.action), outcome);
 
     // Re-read the settings: the user may have saved while the request was in flight, and only
@@ -201,7 +265,26 @@ fn handle(
 
 /// Delivers the action through the same path as the panel's buttons. `Applied` only when the
 /// event was actually taken, so a driver that never started is not reported as success.
-fn deliver(autorun: &AutoRun, action: Action) -> Outcome {
+fn deliver(autorun: &AutoRun, action: Action, text: Option<&str>) -> Outcome {
+    // The one action with a parameter. It goes through `AutoRun`, the same door the panel uses;
+    // the driver turns it into the continuation a "continue" press would have started.
+    if action == Action::Send {
+        let Some(text) = text else {
+            // Verified as a `send` but carrying nothing: refused rather than turned into a
+            // plain continue, which would run words the user never wrote.
+            return Outcome::Malformed;
+        };
+        return match autorun.send_text(text.to_owned()) {
+            Ok(()) => Outcome::Applied,
+            Err(error) => {
+                log(&LogRecord::from_error(
+                    "remote_command_not_delivered",
+                    &error,
+                ));
+                Outcome::Unavailable
+            }
+        };
+    }
     let Some(event) = guard::event_for(action) else {
         // `status` changes nothing; the receipt that follows is the whole answer.
         return Outcome::Applied;

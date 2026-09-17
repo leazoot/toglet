@@ -50,6 +50,10 @@ Bind a Codex session to a set of backup accounts before you leave the computer. 
 
 Get told when a continuation finishes, needs your answer, switched account or stopped. Bark, WeCom, Telegram, e-mail over SMTP, or a webhook of your own.
 
+### Reset alerts
+
+See when Codex last reset everyone's usage, what has been announced, and the forecast, and get told when the next one lands. Data from [Codex Resets](https://codex-resets.com). Off by default.
+
 ### Phone remote (experimental)
 
 Continue, pause or cancel a task from your phone through a small bridge you host yourself. Still in development.
@@ -101,6 +105,10 @@ Settings → Notifications. Add a channel, send a test, switch it on. With no ch
 
 A message carries a title, one sentence, and at most the account's name. Addresses must be `https`, except on this machine. The details a channel needs to send are stored the same way a sign-in is, and are not shown again: editing a channel starts with empty fields, and leaving them empty keeps what is saved.
 
+## Reset alerts
+
+Settings → Reset alerts. Switch it on and a line above the panel's status bar shows the last reset, an announced one, or the site's forecast; a new reset goes to the desktop and to the channels you pick. While on, Toglet reads codex-resets.com every five minutes and sends nothing about your accounts.
+
 ## Phone remote (experimental)
 
 **Experimental and still in development.** It works end to end on one machine with a local bridge, but has not been tried with a real server certificate or on a real phone yet.
@@ -127,7 +135,7 @@ The bridge and the phone page live in [`examples/`](examples/README.md) as refer
 
 Toglet runs locally, has no server and sends no telemetry. Signing in, reading quota and continuing a session all go through Codex.
 
-Toglet makes outbound requests of its own in exactly two cases: sending a notification to a channel you configured, and polling a bridge you configured. Both are off until you set them up.
+Toglet makes outbound requests of its own in exactly three cases: sending a notification to a channel you configured, polling a bridge you configured, and reading the public reset status at codex-resets.com while reset alerts are on. All three are off until you set them up.
 
 Credentials for the accounts that are not currently active are kept on this machine: encrypted with DPAPI on Windows, and in a file readable only by the current user on macOS. The login keychain is not used. Tokens, full e-mail addresses and absolute paths do not appear in logs, error messages or on screen, and there is no plaintext export.
 

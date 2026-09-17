@@ -21,6 +21,8 @@ import { useSettings } from "./features/settings/store";
 import { useStartup } from "./features/startup/store";
 import { ResetOverlay } from "./features/accounts/ResetOverlay";
 import { useReset } from "./features/accounts/resetStore";
+import { resetNotification } from "./features/resets/notifications";
+import { useResets } from "./features/resets/store";
 import { SwitchOverlay } from "./features/switching/SwitchOverlay";
 import { useSwitching } from "./features/switching/store";
 import { traySummary } from "./features/dock/traySummary";
@@ -31,10 +33,11 @@ import {
   notify,
   onAccountsChanged,
   onAutoRunState,
+  onResetAnnounced,
+  onResetsState,
   onTrayRefresh,
   onTraySettings,
   onTrayShow,
-  setDockExpansion,
   setTrayLabels,
   setTraySummary,
 } from "./ipc";
@@ -150,6 +153,40 @@ export function App(): JSX.Element {
     };
   }, [replaceAutoRun]);
 
+  // Reset alerts: read once, then follow what the poll thread pushes. An announcement becomes
+  // one sentence, sent to the desktop and to the channels chosen for it - by id, so a channel
+  // switched off for continuation alerts still gets this one if it was picked here.
+  const resets = useResets((state) => state.resets);
+  const loadResets = useResets((state) => state.load);
+  const replaceResets = useResets((state) => state.replace);
+  useEffect(() => {
+    void loadResets();
+  }, [loadResets]);
+  useEffect(() => {
+    const stop = onResetsState(replaceResets);
+    return () => {
+      void stop.then((off) => {
+        off();
+      });
+    };
+  }, [replaceResets]);
+  useEffect(() => {
+    const stop = onResetAnnounced((event) => {
+      const sentence = resetNotification(event, nowSeconds(), t);
+      void notify(sentence.title, sentence.body);
+      const current = useResets.getState().resets;
+      const chosen = current.state === "ready" ? current.value.channelIds : [];
+      for (const channelId of chosen) {
+        void deliverNotification(sentence.title, sentence.body, channelId);
+      }
+    });
+    return () => {
+      void stop.then((off) => {
+        off();
+      });
+    };
+  }, []);
+
   // The scheduler switched accounts. Re-read the list; the active account is never inferred
   // from the plan.
   useEffect(() => {
@@ -252,11 +289,6 @@ export function App(): JSX.Element {
       clearInterval(timer);
     };
   }, [inactiveSeconds, activeId, ids, loadQuota]);
-
-  // The window never resizes; Rust toggles click-through for the transparent strip from this.
-  useEffect(() => {
-    void setDockExpansion(expanded);
-  }, [expanded]);
 
   const beginSwitch = useCallback(
     (account: AccountView) => {
@@ -395,6 +427,7 @@ export function App(): JSX.Element {
       held={addPhase === "waiting" || (settingsOpen && (removal !== null || sheetPinned))}
       onCollapsed={closeSheets}
       autorun={plan.state === "ready" ? plan.value : null}
+      resets={resets.state === "ready" ? resets.value : null}
       autorunBusy={controlling}
       autorunFailure={autoRunFailure}
       onAutoRunControl={(action) => {

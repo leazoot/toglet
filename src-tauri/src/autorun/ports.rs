@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use super::availability::{AccountFacts, Candidate, Selection, assess, choose};
 use super::driver::{Clock, Ports, Resumed, Verification, parse_rfc3339, rfc3339};
-use super::executor::Executor;
+use super::executor::{Continuation, Executor};
 use super::machine::{Exhausted, Fact, State, WaitReason};
 use super::plan::AutoRunPlan;
 use super::takeover::Takeover;
@@ -71,6 +71,11 @@ pub struct AppPorts {
     clock: Box<dyn Clock>,
     executor: Option<Executor>,
     takeover: Takeover,
+    /// Shared with `AutoRun` so `remote` can seal the agent's last message into a receipt.
+    ///
+    /// Deliberately not the plan and not the view: the plan is written to disk and the view
+    /// crosses to the desktop interface, and this is session content.
+    excerpt: std::sync::Arc<std::sync::Mutex<Option<String>>>,
 }
 
 impl AppPorts {
@@ -80,6 +85,7 @@ impl AppPorts {
         restart: Box<dyn ClientRestart + Send>,
         faults: Box<dyn Faults + Send>,
         clock: Box<dyn Clock>,
+        excerpt: std::sync::Arc<std::sync::Mutex<Option<String>>>,
     ) -> Self {
         Self {
             services,
@@ -89,7 +95,21 @@ impl AppPorts {
             clock,
             executor: None,
             takeover: Takeover::new(),
+            excerpt,
         }
+    }
+
+    /// Copies whatever the executor last saw into the shared slot.
+    fn publish_excerpt(&mut self) {
+        let latest = self.executor.as_ref().and_then(Executor::last_excerpt);
+        if latest.is_none() {
+            return;
+        }
+        let mut slot = self
+            .excerpt
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        *slot = latest;
     }
 
     fn executor(&mut self) -> Result<&mut Executor> {
@@ -180,7 +200,9 @@ fn exhausted_account(exhausted: Option<&Exhausted>, active: Option<&str>) -> Opt
 impl Ports for AppPorts {
     fn read_thread(&mut self, plan: &AutoRunPlan) -> Result<Fact> {
         let thread_id = bound_thread(plan)?.to_owned();
-        self.executor()?.read_thread(&thread_id)
+        let fact = self.executor()?.read_thread(&thread_id);
+        self.publish_excerpt();
+        fact
     }
 
     fn select(&mut self, plan: &AutoRunPlan, exhausted: Option<&Exhausted>) -> Selection {
@@ -316,6 +338,7 @@ impl Ports for AppPorts {
         plan: &AutoRunPlan,
         account_id: &str,
         after_turn: Option<&str>,
+        instruction: Option<&str>,
     ) -> Result<Resumed> {
         let binding = plan
             .binding
@@ -332,15 +355,27 @@ impl Ports for AppPorts {
             .acquire(self.probe.as_ref(), self.restart.as_ref(), &own)?;
 
         let thread_id = binding.thread_id.clone();
-        let instruction = binding.resume_instruction.clone();
+        // The phone's sentence wins for this turn; the stored instruction is left untouched,
+        // because automatic continuation still needs it when quota comes back. Which of the two
+        // it is also decides what may be done to a thread that is parked.
+        let text = instruction
+            .unwrap_or(&binding.resume_instruction)
+            .to_owned();
+        let continuation = match instruction {
+            Some(_) => Continuation::Steered(&text),
+            None => Continuation::Automatic(&text),
+        };
         self.executor()?
-            .resume(&thread_id, &instruction, &record.fingerprint, after_turn)
+            .resume(&thread_id, continuation, &record.fingerprint, after_turn)
     }
 
     fn poll_turn(&mut self, wait: Duration) -> Option<Fact> {
-        self.executor
+        let fact = self
+            .executor
             .as_mut()
-            .and_then(|executor| executor.poll(wait))
+            .and_then(|executor| executor.poll(wait));
+        self.publish_excerpt();
+        fact
     }
 
     fn stop_executing(&mut self) {

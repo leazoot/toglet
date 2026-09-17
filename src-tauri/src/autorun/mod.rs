@@ -20,7 +20,7 @@ pub use driver::{
     Ports, Resumed, SystemClock, Verification, WATCH_INTERVAL_SECONDS, parse_rfc3339, rfc3339,
     spawn,
 };
-pub use executor::Executor;
+pub use executor::{Continuation, Executor};
 pub use machine::{
     Action, Dedup, Exhausted, Fact, Ignored, Interruption, LastResult, Machine, Outcome, Restored,
     ResultKind, State, UserEvent, WaitReason,

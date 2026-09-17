@@ -38,7 +38,10 @@ export type CommandName =
   | "save_remote"
   | "forget_remote"
   | "remote_secret_minimum"
-  | "send_notification";
+  | "send_notification"
+  | "read_resets"
+  | "save_resets"
+  | "open_resets_site";
 
 /**
  * A call that did not produce a value. The raw rejection is discarded: it can be an OS message
@@ -475,12 +478,32 @@ export interface RemoteLastCommand {
 }
 
 /** Phone remote state. The shared secret is never read back. */
+/** The open panel in CSS pixels relative to the window, so Rust can aim the pointer gate. */
+export interface PanelRect {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+}
+
 export interface RemoteView {
   readonly enabled: boolean;
+  /**
+   * Whether the agent's last message may ride along, sealed, in a receipt. Off by default: an
+   * upgrade must not start sending session content unasked.
+   */
+  readonly shareExcerpt: boolean;
   readonly paired: boolean;
   readonly bridgeHost: string;
   /** The full bridge address, offered for editing. */
   readonly bridgeEndpoint: string | null;
+  /**
+   * The key the bridge checks a `GET /status` read against; `null` when unpaired.
+   *
+   * Not the shared secret: a one-way derivation of it, meant to be pasted onto the bridge, which
+   * this design treats as untrusted. The secret itself never leaves Rust.
+   */
+  readonly statusKey: string | null;
   readonly lastCommand: RemoteLastCommand | null;
 }
 
@@ -490,6 +513,8 @@ export interface RemoteView {
  */
 export interface RemoteDraft {
   readonly enabled: boolean;
+  /** Left out to keep the stored preference. */
+  readonly shareExcerpt?: boolean;
   readonly endpoint?: string;
   readonly secret?: string;
 }
@@ -500,3 +525,93 @@ export interface NotifyOutcome {
   readonly ok: boolean;
   readonly code: string | null;
 }
+
+// ---------------------------------------------------------------- reset alerts (BATCH-08)
+
+/** Whether a reset applied to everyone or granted a banked credit. */
+export type ResetKind = "regular" | "banked";
+
+/** How sure the feed's classifier is about a forecast. */
+export type WatchLevel = "elevated" | "strong";
+
+/** A reset that was announced or observed. `text` is one line, capped, or `null` when blank. */
+export interface ResetView {
+  readonly id: string;
+  readonly kind: ResetKind;
+  /** Unix seconds. */
+  readonly announcedAt: number;
+  readonly text: string | null;
+}
+
+/** An announced reset still waiting for evidence that it happened. */
+export interface ScheduledResetView {
+  readonly id: string;
+  readonly kind: ResetKind;
+  readonly announcedAt: number;
+  /** Unix seconds, or `null` when the announcement named no time. */
+  readonly scheduledFor: number | null;
+  readonly text: string | null;
+}
+
+/** An AI-classified forecast; the feed's own words: not an official commitment. */
+export interface ResetWatchView {
+  readonly level: WatchLevel;
+  /** `null` when the classifier gave no figure; never shown as 0. */
+  readonly chancePercent: number | null;
+  readonly forecastWindow: string;
+  readonly observedAt: number;
+  readonly expiresAt: number;
+  readonly text: string | null;
+}
+
+/** Aggregate figures. Every nullable one is unknown when `null`, never zero. */
+export interface ResetStatsView {
+  readonly total: number;
+  readonly lastResetAt: number | null;
+  readonly daysSinceLast: number | null;
+  readonly avgIntervalDays: number | null;
+}
+
+/** One reading of the feed. */
+export interface ResetStatusView {
+  readonly latestReset: ResetView | null;
+  readonly scheduledReset: ScheduledResetView | null;
+  readonly activeWatch: ResetWatchView | null;
+  readonly stats: ResetStatsView;
+  readonly generatedAt: number;
+}
+
+/** The reset-alert settings and the last reading, mirrored from Rust. */
+export interface ResetsView {
+  readonly enabled: boolean;
+  /** Channels chosen for reset alerts, by id; only ids whose channel exists. */
+  readonly channelIds: readonly string[];
+  readonly status: ResetStatusView | null;
+  /** Unix seconds of the reading `status` came from; `null` when there has been none. */
+  readonly fetchedAt: number | null;
+  /** True when `status` is older than three polls. Never true without a `status`. */
+  readonly stale: boolean;
+  /** Stable code of the last failed reading, cleared by the next good one. */
+  readonly lastError: string | null;
+}
+
+export interface ResetsDraft {
+  readonly enabled: boolean;
+  readonly channelIds: readonly string[];
+}
+
+/** One event worth a notification: codes and timestamps only, the sentence is ours. */
+export type ResetAnnouncementView =
+  | { readonly kind: "reset"; readonly resetType: ResetKind; readonly at: number }
+  | {
+      readonly kind: "scheduled";
+      readonly resetType: ResetKind;
+      readonly at: number;
+      readonly scheduledFor: number | null;
+    }
+  | {
+      readonly kind: "watch";
+      readonly level: WatchLevel;
+      readonly chancePercent: number | null;
+      readonly at: number;
+    };

@@ -200,6 +200,16 @@ impl Notifications {
         }
     }
 
+    /// The ids of every channel that exists, whatever its switch says. For features that pick
+    /// channels by id (reset alerts): an id whose channel is gone must be dropped, not sent to.
+    pub fn channel_ids(&self) -> Vec<String> {
+        self.book()
+            .channels
+            .iter()
+            .map(|channel| channel.id.clone())
+            .collect()
+    }
+
     fn book(&self) -> std::sync::MutexGuard<'_, ChannelBook> {
         self.book
             .lock()

@@ -238,6 +238,8 @@ impl Rig {
             Box::new(NoRestart),
             faults,
             Box::new(clock.clone()),
+            // The agent excerpt goes to `remote`, which this rig does not exercise.
+            Arc::new(std::sync::Mutex::new(None)),
         );
         let (tx, changes) = mpsc::channel();
         let handle = spawn(DriverConfig {

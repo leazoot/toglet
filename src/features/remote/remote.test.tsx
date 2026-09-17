@@ -12,9 +12,11 @@ import { useRemote } from "./store";
 function view(overrides: Partial<RemoteView> = {}): RemoteView {
   return {
     enabled: false,
+    shareExcerpt: false,
     paired: false,
     bridgeHost: "",
     bridgeEndpoint: null,
+    statusKey: null,
     lastCommand: null,
     ...overrides,
   };
@@ -47,6 +49,34 @@ async function repair(): Promise<void> {
 }
 
 describe("the remote continuation page", () => {
+  // The key is a one-way derivation of the secret and is meant to be pasted onto the bridge, so
+  // showing it is the point. The secret itself must still have no way onto the screen.
+  it("shows the status key masked, never the whole value", async () => {
+    const key = "184b2be9f1ed19cd39a53a95715a7ee4dca55a817e48aa4c20ac6d99279845ea";
+    answerWith(
+      view({
+        enabled: true,
+        paired: true,
+        bridgeHost: "bridge.example.com",
+        statusKey: key,
+      }),
+    );
+    const { container } = render(<RemoteSection />);
+
+    await screen.findByTestId("remote-section");
+    expect(screen.getByText("184b********45ea")).toBeDefined();
+    // The value leaves only through the copy button; it must not sit on the screen.
+    expect(container.textContent).not.toContain(key);
+  });
+
+  it("offers no status key before anything is paired", async () => {
+    answerWith(view());
+    render(<RemoteSection />);
+
+    await screen.findByTestId("remote-section");
+    expect(screen.queryByText(/status key/i)).toBeNull();
+  });
+
   it("keeps the one limit the phone cannot work around, and nothing else", async () => {
     answerWith(view({ enabled: true, paired: true, bridgeHost: "bridge.example.com" }));
     render(<RemoteSection />);
@@ -116,22 +146,56 @@ describe("the remote continuation page", () => {
     expect(box(container, "text").value).not.toBe(first);
   });
 
-  it("stops showing the secret the moment it is saved, and never offers to copy a stored one", async () => {
+  it("keeps a generated secret until it is dismissed, since it still has to reach the phone", async () => {
     answerWith(view(), view({ enabled: true, paired: true, bridgeHost: "bridge.example.com" }));
     const { container } = render(<RemoteSection />);
     await screen.findByTestId("remote-section");
 
     fireEvent.change(box(container, "url"), { target: { value: "https://bridge.example.com/x" } });
     fireEvent.click(screen.getByRole("button", { name: /generate/i }));
-    expect(screen.getByRole("button", { name: /^copy$/i })).toBeDefined();
+    const made = box(container, "text").value;
 
     fireEvent.click(screen.getByRole("button", { name: /^pair$/i }));
 
-    // Once saved there is nothing left to read or copy.
+    // The fields go, but the generated value stays: losing it means generating another one, which
+    // silently invalidates the status key already deployed on the bridge.
     await waitFor(() => {
       expect(container.querySelectorAll("input").length).toBe(0);
     });
-    expect(screen.queryByRole("button", { name: /copy/i })).toBeNull();
+    expect(screen.getByText(made)).toBeDefined();
+
+    fireEvent.click(screen.getByRole("button", { name: /^done$/i }));
+    expect(screen.queryByText(made)).toBeNull();
+  });
+
+  it("does not keep a typed secret after saving, since the user already has it", async () => {
+    answerWith(view(), view({ enabled: true, paired: true, bridgeHost: "bridge.example.com" }));
+    const { container } = render(<RemoteSection />);
+    await screen.findByTestId("remote-section");
+
+    fireEvent.change(box(container, "url"), { target: { value: "https://bridge.example.com/x" } });
+    fireEvent.change(box(container, "password"), { target: { value: "typed-by-hand-1234" } });
+    fireEvent.click(screen.getByRole("button", { name: /^pair$/i }));
+
+    await waitFor(() => {
+      expect(container.querySelectorAll("input").length).toBe(0);
+    });
+    expect(screen.queryByText("typed-by-hand-1234")).toBeNull();
+    expect(screen.queryByRole("button", { name: /^done$/i })).toBeNull();
+  });
+
+  it("never offers a stored secret, however the pairing was made", async () => {
+    answerWith(view(), view({ enabled: true, paired: true, bridgeHost: "bridge.example.com" }));
+    const { container } = render(<RemoteSection />);
+    await screen.findByTestId("remote-section");
+
+    fireEvent.change(box(container, "url"), { target: { value: "https://bridge.example.com/x" } });
+    fireEvent.click(screen.getByRole("button", { name: /generate/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^pair$/i }));
+    await waitFor(() => {
+      expect(container.querySelectorAll("input").length).toBe(0);
+    });
+    fireEvent.click(screen.getByRole("button", { name: /^done$/i }));
 
     // Re-opening shows an empty, masked field, not the stored secret.
     fireEvent.click(screen.getByRole("button", { name: /re-pair/i }));

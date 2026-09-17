@@ -56,7 +56,8 @@ enum Call {
     Select,
     Verify(String),
     Switch(String),
-    Resume(String),
+    /// The account, and the sentence the phone sent, when there was one.
+    Resume(String, Option<String>),
     StopExecuting,
     Notify(State, Option<WaitReason>),
 }
@@ -164,8 +165,12 @@ impl Ports for FakePorts {
         _plan: &AutoRunPlan,
         account_id: &str,
         _after_turn: Option<&str>,
+        instruction: Option<&str>,
     ) -> Result<Resumed> {
-        self.record(Call::Resume(account_id.to_owned()));
+        self.record(Call::Resume(
+            account_id.to_owned(),
+            instruction.map(str::to_owned),
+        ));
         self.with(|script| script.resume.pop_front())
             .unwrap_or_else(|| {
                 Ok(Resumed::Started {
@@ -197,6 +202,17 @@ fn network() -> TogletError {
         Phase::ReadQuota,
         true,
         UserAction::Retry,
+    )
+}
+
+/// Somebody else had the session. `session_busy` treats this as "lifts by itself", so the
+/// driver retries rather than giving up.
+fn client_running() -> TogletError {
+    TogletError::new(
+        ErrorCode::ClientRunning,
+        Phase::Autorun,
+        true,
+        UserAction::CloseCodexClient,
     )
 }
 
@@ -498,7 +514,7 @@ fn a_blocked_account_is_re_read_only_after_the_expected_time_plus_the_buffer() {
         .map(|(at, _)| at)
         .collect();
     assert_eq!(verify_at, vec![expected + BUFFER]);
-    assert_eq!(rig.ports.count(|call| matches!(call, Call::Resume(_))), 0);
+    assert_eq!(rig.ports.count(|call| matches!(call, Call::Resume(..))), 0);
     assert_eq!(rig.ports.count(|call| matches!(call, Call::Switch(_))), 0);
     rig.shutdown();
 }
@@ -518,11 +534,11 @@ fn a_failed_read_is_retried_no_sooner_than_the_backoff() {
     // First read fails at T0; the plan says the retry is 30 s out.
     let waiting = rig.until(|plan| plan.state == State::Verifying && plan.next_check_at.is_some());
     assert_eq!(waiting.next_check_at, Some(T0 + 30));
-    rig.settle_without(|call| matches!(call, Call::Resume(_)));
+    rig.settle_without(|call| matches!(call, Call::Resume(..)));
     assert_eq!(rig.ports.count(|call| matches!(call, Call::Verify(_))), 1);
 
     rig.clock.advance(29);
-    rig.settle_without(|call| matches!(call, Call::Resume(_)));
+    rig.settle_without(|call| matches!(call, Call::Resume(..)));
     assert_eq!(rig.ports.count(|call| matches!(call, Call::Verify(_))), 1);
 
     // Second read fails at T0 + 30; the backoff has doubled.
@@ -612,7 +628,7 @@ fn a_result_that_arrives_after_a_pause_is_dropped() {
 
     let paused = rig.until_state(State::Paused);
     assert!(paused.wait_reason.is_none());
-    rig.settle_without(|call| matches!(call, Call::Resume(_) | Call::Switch(_)));
+    rig.settle_without(|call| matches!(call, Call::Resume(..) | Call::Switch(_)));
     assert_eq!(rig.on_disk().state, State::Paused);
     rig.shutdown();
 }
@@ -633,7 +649,7 @@ fn cancel_ends_the_wait_within_a_second_and_disables() {
     assert!(started.elapsed() < Duration::from_secs(1));
     assert!(!disabled.enabled);
     assert_eq!(rig.power.live(), 0);
-    rig.settle_without(|call| matches!(call, Call::Verify(_) | Call::Resume(_)));
+    rig.settle_without(|call| matches!(call, Call::Verify(_) | Call::Resume(..)));
     rig.shutdown();
 }
 
@@ -717,11 +733,237 @@ fn a_round_is_one_continuation_then_the_session_is_released() {
     rig.until_calls(1, |call| *call == Call::StopExecuting);
     rig.until_calls(1, |call| *call == Call::Notify(State::RoundCompleted, None));
     rig.settle_without(|call| matches!(call, Call::Switch(_)));
-    assert_eq!(rig.ports.count(|call| matches!(call, Call::Resume(_))), 1);
+    assert_eq!(rig.ports.count(|call| matches!(call, Call::Resume(..))), 1);
     assert_eq!(rig.ports.count(|call| *call == Call::StopExecuting), 1);
     assert_eq!(rig.power.live(), 0);
     assert_eq!(rig.on_disk().state, State::RoundCompleted);
     rig.shutdown();
+}
+
+// A sentence typed on the phone continues this turn and nothing more: the instruction the user
+// bound stays exactly as it was, because automatic continuation still needs it when quota
+// returns.
+#[test]
+fn a_phone_sentence_is_used_for_one_turn_and_never_rewrites_the_stored_instruction() {
+    let mut rig = Rig::disabled();
+    rig.ports.with(|script| {
+        script.read_thread.push_back(Ok(exhausted("t1")));
+        script.select.push_back(now("a"));
+        script.verify.push_back(available("a"));
+        script.resume.push_back(Ok(Resumed::Started {
+            turn_id: "t2".to_owned(),
+        }));
+    });
+    rig.arm();
+    rig.handle()
+        .send_text("go with your recommendation".to_owned())
+        .expect("sent");
+
+    rig.until_calls(1, |call| matches!(call, Call::Resume(..)));
+    let calls = rig.ports.calls();
+    let sent = calls
+        .iter()
+        .find_map(|(_, call)| match call {
+            Call::Resume(_, instruction) => Some(instruction.clone()),
+            _ => None,
+        })
+        .expect("a resume happened");
+    assert_eq!(sent.as_deref(), Some("go with your recommendation"));
+
+    // The bound instruction on disk is untouched.
+    let stored = rig.on_disk();
+    assert_eq!(
+        stored
+            .binding
+            .as_ref()
+            .map(|binding| binding.resume_instruction.as_str()),
+        Some("Continue.")
+    );
+    rig.shutdown();
+}
+
+// The sentence is session content: it lives in the driver for one turn and never reaches disk.
+#[test]
+fn a_phone_sentence_never_reaches_the_plan_file() {
+    let mut rig = Rig::disabled();
+    rig.ports.with(|script| {
+        script.read_thread.push_back(Ok(exhausted("t1")));
+        script.select.push_back(now("a"));
+        script.verify.push_back(available("a"));
+        script.resume.push_back(Ok(Resumed::Started {
+            turn_id: "t2".to_owned(),
+        }));
+    });
+    rig.arm();
+    let secret = "please delete the staging database";
+    rig.handle().send_text(secret.to_owned()).expect("sent");
+    rig.until_calls(1, |call| matches!(call, Call::Resume(..)));
+
+    // Every file the driver wrote, not just the one we know the name of.
+    let entries = std::fs::read_dir(rig.home.path()).expect("the directory is readable");
+    let mut looked_at = 0;
+    for entry in entries.flatten() {
+        if let Ok(written) = std::fs::read_to_string(entry.path()) {
+            looked_at += 1;
+            assert!(
+                !written.contains(secret),
+                "{:?} leaked the sentence:\n{written}",
+                entry.path()
+            );
+        }
+    }
+    assert!(looked_at > 0, "no files were checked");
+    rig.shutdown();
+}
+
+// A takeover that was busy retries, and the sentence has to still be there when it does. This
+// is why the driver clears it only once a turn really starts, not when one is attempted.
+#[test]
+fn a_sentence_survives_a_takeover_that_was_busy() {
+    let mut rig = Rig::disabled();
+    rig.ports.with(|script| {
+        script.read_thread.push_back(Ok(exhausted("t1")));
+        script.select.push_back(now("a"));
+        script.verify.push_back(available("a"));
+        script.resume.push_back(Err(client_running()));
+        script.resume.push_back(Ok(Resumed::Started {
+            turn_id: "t2".to_owned(),
+        }));
+    });
+    rig.arm();
+    let sentence = "go with your recommendation";
+    rig.handle().send_text(sentence.to_owned()).expect("sent");
+
+    rig.until_calls(1, |call| matches!(call, Call::Resume(..)));
+    rig.clock.advance(3 * 60 * 60);
+    rig.until_calls(2, |call| matches!(call, Call::Resume(..)));
+
+    let calls = rig.ports.calls();
+    let attempts: Vec<Option<String>> = calls
+        .iter()
+        .filter_map(|(_, call)| match call {
+            Call::Resume(_, instruction) => Some(instruction.clone()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(attempts.len(), 2);
+    for (index, attempt) in attempts.iter().enumerate() {
+        assert_eq!(
+            attempt.as_deref(),
+            Some(sentence),
+            "attempt {index} lost the sentence"
+        );
+    }
+    rig.shutdown();
+}
+
+// The case remote control exists for, end to end through the driver: the session stopped to ask
+// something and the answer comes from the phone.
+//
+// Before this, a sentence in `needs_human` took the "continue" path, which re-arms the machine;
+// arming re-reads the bound thread, finds it still waiting on a person, and goes straight back
+// to `needs_human`. The sentence never reached a continuation at all, and lingered in the driver
+// where a later automatic resume would have carried words written for a different moment.
+#[test]
+fn a_sentence_continues_a_session_that_is_waiting_on_a_person() {
+    let mut rig = Rig::disabled();
+    rig.ports.with(|script| {
+        script.read_thread.push_back(Ok(exhausted("t1")));
+        script.select.push_back(now("a"));
+        script.verify.push_back(available("a"));
+        // The automatic continuation runs into a question, so the plan waits for a person.
+        script.resume.push_back(Ok(Resumed::WaitingOnHuman));
+        script.resume.push_back(Ok(Resumed::Started {
+            turn_id: "t2".to_owned(),
+        }));
+    });
+    rig.arm();
+    rig.until_state(State::NeedsHuman);
+    assert_eq!(rig.ports.count(|call| matches!(call, Call::Resume(..))), 1);
+
+    rig.handle()
+        .send_text("go with your recommendation".to_owned())
+        .expect("sent");
+
+    rig.until_calls(2, |call| matches!(call, Call::Resume(..)));
+    let calls = rig.ports.calls();
+    let sentences: Vec<Option<String>> = calls
+        .iter()
+        .filter_map(|(_, call)| match call {
+            Call::Resume(_, instruction) => Some(instruction.clone()),
+            _ => None,
+        })
+        .collect();
+    // The automatic continuation carried the stored instruction; the phone's carried its own.
+    assert_eq!(sentences[0], None);
+    assert_eq!(sentences[1].as_deref(), Some("go with your recommendation"));
+    rig.shutdown();
+}
+
+// A sentence nothing can carry is dropped rather than kept: a turn is already running, so there
+// is no continuation to attach it to, and it must not ride the next one.
+#[test]
+fn a_sentence_sent_while_a_turn_runs_is_not_kept_for_the_next_one() {
+    let mut rig = Rig::disabled();
+    rig.ports.with(|script| {
+        script.read_thread.push_back(Ok(exhausted("t1")));
+        script.select.push_back(now("a"));
+        script.verify.push_back(available("a"));
+        script.resume.push_back(Ok(Resumed::Started {
+            turn_id: "t2".to_owned(),
+        }));
+        script.poll.push_back(exhausted("t2"));
+        script.select.push_back(now("a"));
+        script.verify.push_back(available("a"));
+        script.resume.push_back(Ok(Resumed::Started {
+            turn_id: "t3".to_owned(),
+        }));
+    });
+    rig.arm();
+    rig.until_calls(1, |call| matches!(call, Call::Resume(..)));
+
+    // The turn is running: `send` is not offered on the phone in this state, and if one arrives
+    // anyway the driver must not stash it.
+    rig.handle()
+        .send_text("this must never be sent".to_owned())
+        .expect("sent");
+
+    rig.until_calls(2, |call| matches!(call, Call::Resume(..)));
+    let calls = rig.ports.calls();
+    for (_, call) in &calls {
+        if let Call::Resume(_, instruction) = call {
+            assert_eq!(
+                instruction.as_deref(),
+                None,
+                "a sentence rode a continuation it was not written for"
+            );
+        }
+    }
+    rig.shutdown();
+}
+
+// The sentence is session content. The log sink is process-wide, so this test binary cannot
+// read what was logged; what it can check is that the driver never hands the text to the logger
+// in the first place - only how long it was.
+#[test]
+fn the_driver_logs_how_long_a_sentence_was_and_never_the_sentence() {
+    let source = include_str!("../src/autorun/driver.rs");
+    let arm = source
+        .split("Command::SendText(text) =>")
+        .nth(1)
+        .expect("the driver handles a sentence")
+        .split("Command::Observed")
+        .next()
+        .expect("the arm ends");
+
+    assert!(
+        arm.contains("text.chars().count()"),
+        "the driver should log a length, not a sentence"
+    );
+    assert!(
+        !arm.contains("with_detail(&text)") && !arm.contains("with_detail(text)"),
+        "the sentence must never be handed to the logger: {arm}"
+    );
 }
 
 // While the executing account's turn is in flight nobody else is looked at, even when
@@ -750,7 +992,7 @@ fn while_a_turn_runs_no_other_account_is_selected_or_switched_to() {
 
     assert_eq!(rig.ports.count(|call| *call == Call::Select), looked);
     assert_eq!(rig.ports.count(|call| matches!(call, Call::Switch(_))), 0);
-    assert_eq!(rig.ports.count(|call| matches!(call, Call::Resume(_))), 1);
+    assert_eq!(rig.ports.count(|call| matches!(call, Call::Resume(..))), 1);
     assert_eq!(rig.on_disk().state, State::Running);
     rig.shutdown();
 }
@@ -774,11 +1016,14 @@ fn a_switch_happens_before_a_resume_on_another_account() {
         .calls()
         .into_iter()
         .map(|(_, call)| call)
-        .filter(|call| matches!(call, Call::Switch(_) | Call::Resume(_)))
+        .filter(|call| matches!(call, Call::Switch(_) | Call::Resume(..)))
         .collect();
     assert_eq!(
         order,
-        vec![Call::Switch("b".to_owned()), Call::Resume("b".to_owned())]
+        vec![
+            Call::Switch("b".to_owned()),
+            Call::Resume("b".to_owned(), None)
+        ]
     );
     rig.shutdown();
 }

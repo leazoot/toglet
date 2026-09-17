@@ -71,6 +71,8 @@ const SAME_IN_BOTH: readonly MessageKey[] = [
   "notify.kind.webhook",
   "notify.security.tls",
   "notify.security.startTls",
+  // A notification's title is the product's name, here too.
+  "resets.notify.title",
 ];
 
 describe("the Chinese dictionary", () => {

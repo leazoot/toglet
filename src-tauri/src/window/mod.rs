@@ -9,9 +9,9 @@ mod pointer;
 mod tray;
 
 pub use geometry::{
-    BAR_HEIGHT, BAR_WIDTH, DockTarget, EXPANDED_WIDTH, HIT_BUFFER, Placement, RING_HEIGHT,
-    ROOM_ABOVE, ROOM_BELOW, ROOM_INWARD, Selection, Snap, WINDOW_WIDTH, WorkArea, bar_height,
-    bar_rect, clamp_offset, monitor_key, place, select, snap,
+    BAR_HEIGHT, BAR_WIDTH, DockTarget, EXPANDED_WIDTH, HIT_BUFFER, LogicalRect, Placement,
+    RING_HEIGHT, ROOM_ABOVE, ROOM_BELOW, ROOM_INWARD, Selection, Snap, WINDOW_WIDTH, WorkArea,
+    bar_height, bar_rect, clamp_offset, monitor_key, place, select, snap, surface_rect,
 };
 pub use platform::{DockPlatform, TauriDock};
 pub use pointer::{PointerGate, Reach, watch as watch_pointer};

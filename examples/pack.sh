@@ -3,7 +3,11 @@
 #
 #   ./pack.sh                 writes ./toglet-bridge-install.sh
 #   scp toglet-bridge-install.sh root@server:
-#   ssh root@server 'bash toglet-bridge-install.sh bridge.example.com'
+#   ssh root@server 'STATUS_KEY=<64 hex> bash toglet-bridge-install.sh bridge.example.com a1b2'
+#
+# Updating a server that already runs this: same command. The tar overwrites the nine files and
+# leaves .env alone, so the domain and prefix survive; the status key is the one value an older
+# .env will not have.
 #
 # The release workflow attaches the result to each GitHub release. The payload is a tar of the
 # files listed below, rebuilt on every run.
@@ -33,11 +37,18 @@ done
 #!/usr/bin/env bash
 # Toglet remote bridge - self-extracting deployment. NOT PART OF TOGLET.
 #
-#   bash toglet-bridge-install.sh                         asks for the domain
-#   bash toglet-bridge-install.sh bridge.example.com      asks only for the path prefix
-#   bash toglet-bridge-install.sh bridge.example.com a1b2 asks nothing
+#   bash toglet-bridge-install.sh                             asks for whatever is missing
+#   bash toglet-bridge-install.sh bridge.example.com a1b2     asks only for the status key
+#   bash toglet-bridge-install.sh bridge.example.com a1b2 KEY asks nothing
 #
-#   curl -fsSL https://…/toglet-bridge-install.sh | bash -s -- bridge.example.com
+# Piped in there is no terminal to ask at, so the status key has to come from the environment:
+#
+#   curl -fsSL https://…/toglet-bridge-install.sh \
+#     | STATUS_KEY=<64 hex> bash -s -- bridge.example.com a1b2
+#
+# Re-running this over an existing install updates the nine files and keeps .env, so the domain
+# and prefix are remembered - only the status key must be supplied the first time after the
+# upgrade that introduced it.
 #
 #   TOGLET_DIR=/srv/toglet bash toglet-bridge-install.sh  unpack somewhere else
 #

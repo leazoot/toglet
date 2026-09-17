@@ -130,6 +130,29 @@ pub fn clamp_offset(area: WorkArea, shape: DockShape, vertical_offset: i32) -> i
     clamp_to_i32(clamped as i64)
 }
 
+/// A rectangle the interface measured, in CSS pixels relative to the window's client area.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct LogicalRect {
+    pub x: f64,
+    pub y: f64,
+    pub width: f64,
+    pub height: f64,
+}
+
+/// The interface's rectangle in physical screen pixels.
+///
+/// Uses the same rounding as [`bar_rect`] so the two cannot disagree about a shared edge by a
+/// pixel at fractional scales.
+pub fn surface_rect(window: Placement, rect: LogicalRect, scale: f64) -> Placement {
+    let usable = usable_scale(scale);
+    Placement {
+        x: clamp_to_i32(i64::from(window.x) + (rect.x * usable).round() as i64),
+        y: clamp_to_i32(i64::from(window.y) + (rect.y * usable).round() as i64),
+        width: to_physical(rect.width, scale),
+        height: to_physical(rect.height, scale),
+    }
+}
+
 /// The bar plus its inward hit buffer in physical pixels: the rectangle the pointer gate uses.
 pub fn bar_rect(
     window: Placement,

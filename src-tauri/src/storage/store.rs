@@ -109,8 +109,10 @@ impl MetadataStore {
     }
 }
 
-/// Reads only `schemaVersion`, ignoring everything else in the document.
-fn read_schema_version(text: &str) -> Option<u32> {
+/// Reads only `schemaVersion`, ignoring everything else in the document. Shared with the
+/// other versioned files, which check the version before attempting a full parse so a file from
+/// a newer build is reported as such rather than as corrupt.
+pub fn read_schema_version(text: &str) -> Option<u32> {
     #[derive(serde::Deserialize)]
     #[serde(rename_all = "camelCase")]
     struct VersionOnly {

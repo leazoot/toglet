@@ -8,7 +8,7 @@ use serde_json::json;
 use super::mac;
 
 /// Version prefix of every signed byte string; changing it breaks the wire format.
-const PROTOCOL: &str = "toglet-remote/1";
+const PROTOCOL: &str = "toglet-remote/2";
 
 /// Allowed clock skew in either direction. Generous because a command may queue at the bridge
 /// while the machine sleeps; replay is stopped by the counter and nonce, not by this window.
@@ -20,8 +20,17 @@ const ID_HEX_LEN: usize = 32;
 /// Upper bound for code fields, so a bridge cannot make Toglet hold an arbitrary string.
 const MAX_CODE_LEN: usize = 48;
 
-/// The whole remote surface: argument-free actions mirroring existing panel buttons. Actions
-/// with parameters (account, session, text) are deliberately not allowed.
+/// Upper bound for a `send` text, in characters. The point is to bound what a leaked secret can
+/// push at the agent in one go; it is not a limit the user is expected to notice.
+pub const MAX_TEXT_CHARS: usize = 2_000;
+
+/// The remote surface. Four argument-free actions mirroring existing panel buttons, plus
+/// `Send`, the one action that carries a parameter (2026-09-16 user decision, BATCH-07).
+///
+/// The text belongs to the command instance, not to the kind of action, so it lives in
+/// [`Accepted`] rather than in this enum: keeping `Action` `Copy` keeps it usable as the audit
+/// and persistence code already does, and keeps session content out of `remote.json`.
+/// Actions that name an account or a session are still refused.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Action {
     Resume,
@@ -29,6 +38,8 @@ pub enum Action {
     Cancel,
     /// Changes nothing; only asks for a receipt now rather than at the next poll.
     Status,
+    /// Carries a sentence for the bound session, delivered as a `turn/start` payload.
+    Send,
 }
 
 impl Action {
@@ -38,6 +49,7 @@ impl Action {
             Self::Pause => "pause",
             Self::Cancel => "cancel",
             Self::Status => "status",
+            Self::Send => "send",
         }
     }
 
@@ -52,14 +64,23 @@ impl Action {
             "pause" => Self::Pause,
             "cancel" => Self::Cancel,
             "status" => Self::Status,
+            "send" => Self::Send,
             _ => return None,
         })
     }
 
-    /// Whether the action is only valid against the state the phone observed. Only `resume`:
-    /// pause and cancel mean the same in every state, so refusing them on drift would only hurt.
+    /// Whether the action is only valid against the state the phone observed.
+    ///
+    /// `resume` and `send`: both act on what the user was looking at, and a sentence aimed at a
+    /// screen that has moved on may be the wrong sentence. Pause and cancel mean the same in
+    /// every state, so refusing them on drift would only hurt.
     fn needs_the_state_it_was_aimed_at(self) -> bool {
-        matches!(self, Self::Resume)
+        matches!(self, Self::Resume | Self::Send)
+    }
+
+    /// Whether this action carries a text. Exactly one does.
+    fn carries_text(self) -> bool {
+        matches!(self, Self::Send)
     }
 }
 
@@ -90,6 +111,9 @@ pub enum Outcome {
     /// Genuine and current, but the target is not running, so it was not carried out.
     /// Produced by the poller; never reported as `Applied`.
     Unavailable,
+    /// A `send` whose text is longer than [`MAX_TEXT_CHARS`], or a text on an action that takes
+    /// none. Refused whole: never truncated and then carried out.
+    TextTooLong,
 }
 
 impl Outcome {
@@ -107,6 +131,7 @@ impl Outcome {
             Self::StateChanged => "remote_state_changed",
             Self::RateLimited => "remote_rate_limited",
             Self::Unavailable => "remote_unavailable",
+            Self::TextTooLong => "remote_text_too_long",
         }
     }
 
@@ -125,6 +150,7 @@ impl Outcome {
             "remote_state_changed" => Self::StateChanged,
             "remote_rate_limited" => Self::RateLimited,
             "remote_unavailable" => Self::Unavailable,
+            "remote_text_too_long" => Self::TextTooLong,
             _ => return None,
         })
     }
@@ -146,6 +172,10 @@ struct RawCommand {
     nonce: String,
     #[serde(rename = "issuedAt")]
     issued_at: i64,
+    /// Only `send` carries one. Absent and empty sign identically, which is why an action that
+    /// takes no text is refused when it brings one.
+    #[serde(default)]
+    text: Option<String>,
     mac: String,
 }
 
@@ -155,6 +185,8 @@ pub struct Accepted {
     pub action: Action,
     pub counter: u64,
     pub nonce: String,
+    /// The `send` text, once it has been authenticated. `None` for every other action.
+    pub text: Option<String>,
 }
 
 /// Everything the checks compare against, passed in to keep this module pure.
@@ -177,7 +209,7 @@ pub struct Context<'a> {
 pub fn check(payload: &str, context: &Context<'_>) -> Result<Accepted, Outcome> {
     let raw: RawCommand = serde_json::from_str(payload).map_err(|_| Outcome::Malformed)?;
 
-    if raw.v != 1 {
+    if raw.v != 2 {
         return Err(Outcome::Version);
     }
     if raw.kind != "command" {
@@ -188,6 +220,17 @@ pub fn check(payload: &str, context: &Context<'_>) -> Result<Accepted, Outcome> 
     }
     let action = Action::parse(&raw.action).ok_or(Outcome::UnknownAction)?;
 
+    // Bounds before the signature: this persists nothing, and it stops a bridge making Toglet
+    // hold an arbitrary string. An action that takes no text must not bring one.
+    let text = raw.text.as_deref().unwrap_or_default();
+    if action.carries_text() {
+        if text.chars().count() > MAX_TEXT_CHARS {
+            return Err(Outcome::TextTooLong);
+        }
+    } else if !text.is_empty() {
+        return Err(Outcome::TextTooLong);
+    }
+
     let signed = canonical_command(
         action,
         &raw.session_id,
@@ -195,6 +238,7 @@ pub fn check(payload: &str, context: &Context<'_>) -> Result<Accepted, Outcome> 
         raw.counter,
         &raw.nonce,
         raw.issued_at,
+        text,
     );
     if !mac::verify_hex(context.secret, signed.as_bytes(), &raw.mac) {
         return Err(Outcome::BadMac);
@@ -220,6 +264,7 @@ pub fn check(payload: &str, context: &Context<'_>) -> Result<Accepted, Outcome> 
         action,
         counter: raw.counter,
         nonce: raw.nonce,
+        text: action.carries_text().then(|| text.to_owned()),
     })
 }
 
@@ -241,6 +286,12 @@ pub struct Receipt {
     pub next_poll_seconds: u64,
     /// How many times the bound task has been continued.
     pub resume_count: u32,
+    /// The sealed excerpt of the agent's last message, as hex, or `None` when there is none or
+    /// the user has the preview switched off. **Never the plaintext**: everything that can read
+    /// a receipt would otherwise read the session.
+    pub excerpt_ciphertext: Option<String>,
+    /// The nonce the excerpt was sealed with, as hex. Present exactly when the ciphertext is.
+    pub excerpt_nonce: Option<String>,
     pub last_command: Option<LastCommand>,
 }
 
@@ -268,7 +319,7 @@ impl Receipt {
                 })
             });
         let body = json!({
-            "v": 1,
+            "v": 2,
             "kind": "receipt",
             "deviceId": self.device_id,
             "sessionId": self.session_id,
@@ -279,6 +330,8 @@ impl Receipt {
             "cursor": self.cursor,
             "nextPollSeconds": self.next_poll_seconds,
             "resumeCount": self.resume_count,
+            "excerptCiphertext": self.excerpt_ciphertext,
+            "excerptNonce": self.excerpt_nonce,
             "lastCommand": last,
             "mac": mac,
         });
@@ -296,6 +349,7 @@ fn canonical_command(
     counter: u64,
     nonce: &str,
     issued_at: i64,
+    text: &str,
 ) -> String {
     [
         PROTOCOL,
@@ -306,6 +360,9 @@ fn canonical_command(
         &counter.to_string(),
         nonce,
         &issued_at.to_string(),
+        // Last, and always present: without it the bridge could rewrite the one thing on this
+        // path worth rewriting.
+        text,
     ]
     .join("\n")
 }
@@ -335,6 +392,10 @@ fn canonical_receipt(receipt: &Receipt) -> String {
         &receipt.cursor.to_string(),
         &receipt.next_poll_seconds.to_string(),
         &receipt.resume_count.to_string(),
+        // A sealed excerpt is never empty - GCM always emits a tag - so absent and present
+        // cannot alias here.
+        receipt.excerpt_ciphertext.as_deref().unwrap_or(""),
+        receipt.excerpt_nonce.as_deref().unwrap_or(""),
         &last_counter,
         &last_action,
         &last_result,
@@ -392,11 +453,13 @@ mod tests {
             &counter.to_string(),
             NONCE,
             &issued_at.to_string(),
+            // The argument-free actions sign an empty text segment.
+            "",
         ]
         .join("\n");
         let mac = mac::sign_hex(SECRET, signed.as_bytes());
         format!(
-            r#"{{"v":1,"kind":"command","action":"{action}","sessionId":"{session}",
+            r#"{{"v":2,"kind":"command","action":"{action}","sessionId":"{session}",
                "observedState":"{observed}","counter":{counter},"nonce":"{NONCE}",
                "issuedAt":{issued_at},"mac":"{mac}"}}"#
         )
@@ -404,6 +467,29 @@ mod tests {
 
     fn good() -> String {
         command("resume", SESSION, "needs_human", 43, NOW)
+    }
+
+    /// A correctly signed `send`, whose text is inside the signature.
+    fn send(text: &str, observed: &str) -> String {
+        let signed = [
+            PROTOCOL,
+            "command",
+            "send",
+            SESSION,
+            observed,
+            "43",
+            NONCE,
+            &NOW.to_string(),
+            text,
+        ]
+        .join("\n");
+        let mac = mac::sign_hex(SECRET, signed.as_bytes());
+        let escaped = text.replace('\\', "\\\\").replace('"', "\\\"");
+        format!(
+            r#"{{"v":2,"kind":"command","action":"send","sessionId":"{SESSION}",
+               "observedState":"{observed}","counter":43,"nonce":"{NONCE}",
+               "issuedAt":{NOW},"text":"{escaped}","mac":"{mac}"}}"#
+        )
     }
 
     #[test]
@@ -415,14 +501,23 @@ mod tests {
                 action: Action::Resume,
                 counter: 43,
                 nonce: NONCE.to_owned(),
+                text: None,
             }
         );
     }
 
+    /// `/1` is the protocol BATCH-06 shipped. BATCH-07 added a signed text segment and the
+    /// excerpt, so the two cannot interoperate: an old envelope must be refused, not guessed at.
     #[test]
     fn a_version_this_build_does_not_speak_is_refused() {
-        let payload = good().replace(r#""v":1"#, r#""v":2"#);
-        assert_eq!(check(&payload, &context(&[])), Err(Outcome::Version));
+        for version in ["1", "3", "9"] {
+            let payload = good().replace(r#""v":2"#, &format!(r#""v":{version}"#));
+            assert_eq!(
+                check(&payload, &context(&[])),
+                Err(Outcome::Version),
+                "v{version} should be refused"
+            );
+        }
     }
 
     #[test]
@@ -431,7 +526,7 @@ mod tests {
             String::from("not json at all"),
             String::from("{}"),
             // Unknown fields are refused, not ignored.
-            good().replace(r#""v":1"#, r#""v":1,"extra":true"#),
+            good().replace(r#""v":2"#, r#""v":2,"extra":true"#),
             good().replace(SESSION, "short"),
             good().replace(NONCE, &"z".repeat(32)),
             good().replace("needs_human", "Needs Human"),
@@ -448,7 +543,7 @@ mod tests {
     }
 
     #[test]
-    fn an_action_outside_the_four_is_refused() {
+    fn an_action_outside_the_five_is_refused() {
         let payload = command("switch_account", SESSION, "needs_human", 43, NOW);
         assert_eq!(check(&payload, &context(&[])), Err(Outcome::UnknownAction));
     }
@@ -535,7 +630,7 @@ mod tests {
     #[test]
     fn nothing_that_is_refused_reports_a_counter_to_persist() {
         let refused = [
-            good().replace(r#""v":1"#, r#""v":9"#),
+            good().replace(r#""v":2"#, r#""v":9"#),
             String::from("{"),
             command("switch_account", SESSION, "needs_human", 44, NOW),
             good().replace(r#""counter":43"#, r#""counter":9001"#),
@@ -557,6 +652,8 @@ mod tests {
             cursor: 42,
             next_poll_seconds: 20,
             resume_count: 0,
+            excerpt_ciphertext: None,
+            excerpt_nonce: None,
             last_command: Some(LastCommand {
                 counter: 42,
                 action: Action::Resume,
@@ -574,6 +671,89 @@ mod tests {
         assert!(body.contains(&mac));
     }
 
+    /// The excerpt is the one piece of session content allowed out, and it goes out sealed.
+    /// A receipt that carried it in the clear would hand the session to anyone who can read
+    /// `GET /status` - which is the whole reason it is encrypted.
+    #[test]
+    fn a_sealed_excerpt_rides_as_ciphertext_and_never_as_plaintext() {
+        let sentence = "I would rewrite the parser before touching the tests";
+        let sealed = crate::remote::crypt::seal(SECRET, sentence).expect("sealing works");
+
+        let receipt = Receipt {
+            device_id: "6f1c00112233445566778899aabbccdd".to_owned(),
+            session_id: SESSION.to_owned(),
+            issued_at: NOW,
+            state: "needs_human".to_owned(),
+            wait_reason: Some("waiting_on_human".to_owned()),
+            expected_available_at: None,
+            cursor: 42,
+            next_poll_seconds: 20,
+            resume_count: 0,
+            excerpt_ciphertext: Some(sealed.ciphertext_hex.clone()),
+            excerpt_nonce: Some(sealed.nonce_hex.clone()),
+            last_command: None,
+        };
+        let body = receipt.to_json(SECRET);
+
+        assert!(
+            !body.contains(sentence),
+            "the receipt leaked the excerpt: {body}"
+        );
+        assert!(!body.contains("rewrite"), "{body}");
+        assert!(body.contains(&sealed.ciphertext_hex));
+
+        // And the phone, which has the secret, gets the sentence back.
+        assert_eq!(
+            crate::remote::crypt::open(SECRET, &sealed).as_deref(),
+            Some(sentence)
+        );
+    }
+
+    /// Off, unread, or nothing said: `null`, never an empty string. An empty string would read
+    /// on the phone as "the agent said nothing", which is a different fact.
+    #[test]
+    fn a_receipt_without_an_excerpt_says_null_rather_than_empty() {
+        let receipt = Receipt {
+            device_id: "6f1c00112233445566778899aabbccdd".to_owned(),
+            session_id: SESSION.to_owned(),
+            issued_at: NOW,
+            state: "running".to_owned(),
+            wait_reason: None,
+            expected_available_at: None,
+            cursor: 42,
+            next_poll_seconds: 300,
+            resume_count: 0,
+            excerpt_ciphertext: None,
+            excerpt_nonce: None,
+            last_command: None,
+        };
+        let body = receipt.to_json(SECRET);
+
+        assert!(body.contains(r#""excerptCiphertext":null"#), "{body}");
+        assert!(body.contains(r#""excerptNonce":null"#), "{body}");
+        assert!(!body.contains(r#""excerptCiphertext":"""#), "{body}");
+    }
+
+    /// The switch is the only thing standing between a session and a bridge, so the gate is
+    /// checked where it is written rather than trusted.
+    #[test]
+    fn the_poller_seals_only_when_the_switch_is_on() {
+        let source = include_str!("../commands/remote_poll.rs");
+        let gate = source
+            .split("fn sealed_excerpt")
+            .nth(1)
+            .expect("the poller decides whether to seal");
+
+        assert!(
+            gate.contains("if !config.share_excerpt"),
+            "the switch must be checked before anything is read: {gate}"
+        );
+        assert!(
+            gate.contains("crate::remote::crypt::seal("),
+            "the excerpt must leave sealed, never in the clear"
+        );
+    }
+
     #[test]
     fn a_receipt_has_no_sentence_no_path_and_no_quota_figure() {
         let receipt = Receipt {
@@ -586,6 +766,8 @@ mod tests {
             cursor: 42,
             next_poll_seconds: 20,
             resume_count: 0,
+            excerpt_ciphertext: None,
+            excerpt_nonce: None,
             last_command: None,
         };
         let body = receipt.to_json(SECRET);
@@ -618,12 +800,110 @@ mod tests {
             cursor: 7,
             next_poll_seconds: 20,
             resume_count: 0,
+            excerpt_ciphertext: None,
+            excerpt_nonce: None,
             last_command: None,
         };
         let mut with_reason = base.clone();
         with_reason.wait_reason = Some("network".to_owned());
 
         assert_ne!(canonical_receipt(&base), canonical_receipt(&with_reason));
+
+        // The excerpt is the field BATCH-07 added; absent must not sign like present.
+        let mut with_excerpt = base.clone();
+        with_excerpt.excerpt_ciphertext = Some("a1b2c3".to_owned());
+        with_excerpt.excerpt_nonce = Some("00112233445566778899aabb".to_owned());
+        assert_ne!(canonical_receipt(&base), canonical_receipt(&with_excerpt));
+
+        // And the two halves are distinct positions, not one concatenated blob.
+        let mut swapped = with_excerpt.clone();
+        swapped.excerpt_ciphertext = with_excerpt.excerpt_nonce.clone();
+        swapped.excerpt_nonce = with_excerpt.excerpt_ciphertext.clone();
+        assert_ne!(
+            canonical_receipt(&with_excerpt),
+            canonical_receipt(&swapped)
+        );
+    }
+
+    /// The text is the one thing on this path worth rewriting, so it must be signed.
+    #[test]
+    fn the_text_of_a_send_is_inside_the_signature() {
+        let accepted = check(
+            &send("go with your recommendation", "needs_human"),
+            &context(&[]),
+        )
+        .expect("a well-formed send is accepted");
+        assert_eq!(accepted.action, Action::Send);
+        assert_eq!(
+            accepted.text.as_deref(),
+            Some("go with your recommendation")
+        );
+
+        // One word changed, signature untouched.
+        let tampered = send("go with your recommendation", "needs_human")
+            .replace("recommendation", "recommendatioN");
+        assert_eq!(check(&tampered, &context(&[])), Err(Outcome::BadMac));
+    }
+
+    #[test]
+    fn a_text_longer_than_the_cap_is_refused_whole_rather_than_truncated() {
+        let too_long = "a".repeat(MAX_TEXT_CHARS + 1);
+        assert_eq!(
+            check(&send(&too_long, "needs_human"), &context(&[])),
+            Err(Outcome::TextTooLong)
+        );
+
+        // Exactly at the cap is fine; the boundary is not off by one.
+        let at_cap = "a".repeat(MAX_TEXT_CHARS);
+        assert!(check(&send(&at_cap, "needs_human"), &context(&[])).is_ok());
+    }
+
+    /// The cap counts characters, not bytes: a Chinese sentence must not cost three times.
+    #[test]
+    fn the_cap_counts_characters_rather_than_bytes() {
+        let wide = "按".repeat(MAX_TEXT_CHARS);
+        assert!(check(&send(&wide, "needs_human"), &context(&[])).is_ok());
+    }
+
+    #[test]
+    fn an_action_that_takes_no_text_is_refused_when_it_brings_one() {
+        let signed = [
+            PROTOCOL,
+            "command",
+            "resume",
+            SESSION,
+            "needs_human",
+            "43",
+            NONCE,
+            &NOW.to_string(),
+            "sneaky",
+        ]
+        .join("\n");
+        let mac = mac::sign_hex(SECRET, signed.as_bytes());
+        let payload = format!(
+            r#"{{"v":2,"kind":"command","action":"resume","sessionId":"{SESSION}",
+               "observedState":"needs_human","counter":43,"nonce":"{NONCE}",
+               "issuedAt":{NOW},"text":"sneaky","mac":"{mac}"}}"#
+        );
+        assert_eq!(check(&payload, &context(&[])), Err(Outcome::TextTooLong));
+    }
+
+    /// A sentence is aimed at a screen. If the task moved on, the sentence may be the wrong one.
+    #[test]
+    fn a_send_aimed_at_a_screen_that_has_moved_on_is_refused() {
+        assert_eq!(
+            check(&send("carry on", "paused"), &context(&[])),
+            Err(Outcome::StateChanged)
+        );
+    }
+
+    #[test]
+    fn only_a_send_reports_a_text_to_act_on() {
+        for action in ["resume", "pause", "cancel", "status"] {
+            let payload = command(action, SESSION, "needs_human", 43, NOW);
+            let accepted = check(&payload, &context(&[])).expect("accepted");
+            assert_eq!(accepted.text, None, "{action} must carry no text");
+        }
     }
 
     #[test]
@@ -641,6 +921,7 @@ mod tests {
             Outcome::StateChanged,
             Outcome::RateLimited,
             Outcome::Unavailable,
+            Outcome::TextTooLong,
         ];
         let mut seen = Vec::new();
         for outcome in all {
@@ -659,6 +940,7 @@ mod tests {
             Action::Pause,
             Action::Cancel,
             Action::Status,
+            Action::Send,
         ] {
             assert_eq!(Action::parse(action.as_str()), Some(action));
         }

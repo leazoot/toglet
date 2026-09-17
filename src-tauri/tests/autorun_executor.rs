@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use support::{fake_binary, scenario_home};
 use toglet_lib::accounts::fingerprint;
-use toglet_lib::autorun::{Executor, Fact, Interruption, Resumed};
+use toglet_lib::autorun::{Continuation, Executor, Fact, Interruption, Resumed};
 use toglet_lib::codex_home::IsolatedHome;
 use toglet_lib::diagnostics::{ErrorCode, Phase};
 
@@ -70,7 +70,12 @@ fn a_resume_confirms_the_identity_and_starts_one_turn() {
     let mut executor = executor(&home);
 
     let resumed = executor
-        .resume(THREAD_ID, INSTRUCTION, &expected(), Some("t2"))
+        .resume(
+            THREAD_ID,
+            Continuation::Automatic(INSTRUCTION),
+            &expected(),
+            Some("t2"),
+        )
         .expect("resumed");
     assert_eq!(
         resumed,
@@ -102,7 +107,7 @@ fn a_resume_on_the_wrong_account_is_refused_before_anything_is_started() {
     let error = executor
         .resume(
             THREAD_ID,
-            INSTRUCTION,
+            Continuation::Automatic(INSTRUCTION),
             &fingerprint::from_account_id("somebody-else"),
             Some("t2"),
         )
@@ -120,7 +125,12 @@ fn a_thread_that_moved_on_is_reported_as_changed_not_continued() {
     let mut executor = executor(&home);
 
     let resumed = executor
-        .resume(THREAD_ID, INSTRUCTION, &expected(), Some("t1"))
+        .resume(
+            THREAD_ID,
+            Continuation::Automatic(INSTRUCTION),
+            &expected(),
+            Some("t1"),
+        )
         .expect("answered");
     assert_eq!(resumed, Resumed::ThreadChanged);
     assert_eq!(executor.poll(Duration::from_millis(200)), None);
@@ -133,7 +143,12 @@ fn a_turn_still_running_is_waited_for() {
     let mut executor = executor(&home);
 
     let resumed = executor
-        .resume(THREAD_ID, INSTRUCTION, &expected(), Some("t2"))
+        .resume(
+            THREAD_ID,
+            Continuation::Automatic(INSTRUCTION),
+            &expected(),
+            Some("t2"),
+        )
         .expect("answered");
     assert_eq!(resumed, Resumed::TurnInProgress);
     assert!(executor.is_open(), "the session listens for how it ends");
@@ -150,7 +165,12 @@ fn every_way_a_turn_ends_maps_to_its_class() {
         let home = home(scenario);
         let mut executor = executor(&home);
         executor
-            .resume(THREAD_ID, INSTRUCTION, &expected(), Some("t2"))
+            .resume(
+                THREAD_ID,
+                Continuation::Automatic(INSTRUCTION),
+                &expected(),
+                Some("t2"),
+            )
             .expect("resumed");
         assert_eq!(
             next(&mut executor),
@@ -169,9 +189,86 @@ fn a_question_from_the_model_needs_a_person() {
     let home = home("waiting_on_user_input");
     let mut executor = executor(&home);
     executor
-        .resume(THREAD_ID, INSTRUCTION, &expected(), Some("t2"))
+        .resume(
+            THREAD_ID,
+            Continuation::Automatic(INSTRUCTION),
+            &expected(),
+            Some("t2"),
+        )
         .expect("resumed");
     assert_eq!(next(&mut executor), Fact::WaitingOnHuman);
+}
+
+// The case remote control exists for: the session stopped to ask something, and the answer
+// arrives from the phone. The turn holding the question is stopped and the sentence starts one.
+#[test]
+fn a_sentence_for_a_parked_session_stops_the_question_and_starts_a_turn() {
+    let home = home("parked_on_question");
+    let mut executor = executor(&home);
+
+    let resumed = executor
+        .resume(
+            THREAD_ID,
+            Continuation::Steered("go with your recommendation"),
+            &expected(),
+            Some("t2"),
+        )
+        .expect("resumed");
+    assert_eq!(
+        resumed,
+        Resumed::Started {
+            turn_id: TURN_ID.to_owned()
+        }
+    );
+
+    // The interrupted turn was consumed while stopping it, so the only turn reported is the one
+    // the sentence started. Were it otherwise the machine would read the interruption as the
+    // user stopping the plan, and pause the continuation the sentence just asked for.
+    assert_eq!(
+        next(&mut executor),
+        Fact::TurnEnded {
+            turn_id: TURN_ID.to_owned(),
+            interruption: Interruption::Completed
+        }
+    );
+    executor.stop();
+}
+
+// The same parked session, continued automatically: nobody asked, so nothing is interrupted and
+// no turn is started.
+#[test]
+fn an_automatic_continuation_leaves_a_parked_session_alone() {
+    let home = home("parked_on_question");
+    let mut executor = executor(&home);
+
+    let resumed = executor
+        .resume(
+            THREAD_ID,
+            Continuation::Automatic(INSTRUCTION),
+            &expected(),
+            Some("t2"),
+        )
+        .expect("answered");
+    assert_eq!(resumed, Resumed::WaitingOnHuman);
+}
+
+// A sentence for a thread somebody else has moved on with is refused before anything is
+// stopped: the words were written for a moment that has passed.
+#[test]
+fn a_sentence_never_interrupts_a_thread_that_moved_on() {
+    let home = home("parked_on_question");
+    let mut executor = executor(&home);
+
+    let resumed = executor
+        .resume(
+            THREAD_ID,
+            Continuation::Steered("go with your recommendation"),
+            &expected(),
+            Some("t1"),
+        )
+        .expect("answered");
+    assert_eq!(resumed, Resumed::ThreadChanged);
+    assert_eq!(executor.poll(Duration::from_millis(200)), None);
 }
 
 // A session the server cannot serve is a `thread_unavailable`, not a new chat.
@@ -180,7 +277,12 @@ fn a_thread_the_server_refuses_is_reported_with_its_code() {
     let home = home("resume_rejected");
     let mut executor = executor(&home);
     let error = executor
-        .resume(THREAD_ID, INSTRUCTION, &expected(), Some("t2"))
+        .resume(
+            THREAD_ID,
+            Continuation::Automatic(INSTRUCTION),
+            &expected(),
+            Some("t2"),
+        )
         .expect_err("refused");
     assert_eq!(error.code(), ErrorCode::ThreadUnavailable);
 }
@@ -191,7 +293,12 @@ fn stopping_leaves_no_server_behind() {
     let pid = {
         let mut executor = executor(&home);
         executor
-            .resume(THREAD_ID, INSTRUCTION, &expected(), Some("t2"))
+            .resume(
+                THREAD_ID,
+                Continuation::Automatic(INSTRUCTION),
+                &expected(),
+                Some("t2"),
+            )
             .expect("resumed");
         let pid = executor.pid().expect("a server runs");
         executor.stop();

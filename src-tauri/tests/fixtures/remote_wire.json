@@ -4,7 +4,7 @@
   "deviceId": "6f1c00112233445566778899aabbccdd",
   "issuedAt": 1757664000,
   "genuine": {
-    "v": 1,
+    "v": 2,
     "kind": "command",
     "action": "resume",
     "sessionId": "a83b4c1d9e0f2a3b4c5d6e7f80912233",
@@ -12,10 +12,10 @@
     "counter": 43,
     "nonce": "9d2e0011223344556677889900aabbcc",
     "issuedAt": 1757664000,
-    "mac": "a19d593acff5394a5a9df7eed452740842a03493703ce0843e4c2d185a4d60c3"
+    "mac": "a939959a4119d2f069c68902174e65e6a03e0103961d45fb19710bf9adc1d70f"
   },
   "forged": {
-    "v": 1,
+    "v": 2,
     "kind": "command",
     "action": "resume",
     "sessionId": "a83b4c1d9e0f2a3b4c5d6e7f80912233",
@@ -23,10 +23,10 @@
     "counter": 43,
     "nonce": "9d2e0011223344556677889900aabbcc",
     "issuedAt": 1757664000,
-    "mac": "019d593acff5394a5a9df7eed452740842a03493703ce0843e4c2d185a4d60c3"
+    "mac": "0939959a4119d2f069c68902174e65e6a03e0103961d45fb19710bf9adc1d70f"
   },
   "receipt": {
-    "v": 1,
+    "v": 2,
     "kind": "receipt",
     "deviceId": "6f1c00112233445566778899aabbccdd",
     "sessionId": "a83b4c1d9e0f2a3b4c5d6e7f80912233",
@@ -37,15 +37,29 @@
     "cursor": 42,
     "nextPollSeconds": 20,
     "resumeCount": 3,
+    "excerptCiphertext": null,
+    "excerptNonce": null,
     "lastCommand": {
       "counter": 42,
       "action": "resume",
       "result": "applied"
     },
-    "mac": "efbfb379b24082e736616d17c5cfc9a9de93d9596428f8e33125cec91bfd1266"
+    "mac": "26d92778d9321e4696685a44fe19ddb3147ace1ef2287086b45f2c0d975c4e61"
+  },
+  "send": {
+    "v": 2,
+    "kind": "command",
+    "action": "send",
+    "sessionId": "a83b4c1d9e0f2a3b4c5d6e7f80912233",
+    "observedState": "needs_human",
+    "counter": 44,
+    "nonce": "1a2b0011223344556677889900aabbcc",
+    "issuedAt": 1757664000,
+    "mac": "d565c2829f120ddaf27331d39a1743155dfc3df32d2136568afdbfd494b84a83",
+    "text": "go with your recommendation"
   },
   "receiptWaiting": {
-    "v": 1,
+    "v": 2,
     "kind": "receipt",
     "deviceId": "6f1c00112233445566778899aabbccdd",
     "sessionId": "a83b4c1d9e0f2a3b4c5d6e7f80912233",
@@ -56,7 +70,31 @@
     "cursor": 42,
     "nextPollSeconds": 20,
     "resumeCount": 3,
+    "excerptCiphertext": null,
+    "excerptNonce": null,
     "lastCommand": null,
-    "mac": "7dc21d2f6e44505bcc742737244b3645748ff74c623a675d6eadac74603fc9db"
+    "mac": "a74534bd05d72b55e1424abaebdf1c98222afc1c240d6564a1fe05a1b2c61c0f"
+  },
+  "sealedExcerpt": {
+    "plaintext": "解析器有两种改法，我建议先补一个分支。",
+    "ciphertext": "31496da84eaf555ca27c03c45090635326a83656d39ecbec65df6047d78d7235bc18f5006c3c626401117d537d56b9b0f5077a95480def3b27946bf8476987e5837e30cf378e942e1e",
+    "nonce": "0f1e2d3c4b5a69788796a5b4"
+  },
+  "receiptExcerpt": {
+    "v": 2,
+    "kind": "receipt",
+    "deviceId": "6f1c00112233445566778899aabbccdd",
+    "sessionId": "a83b4c1d9e0f2a3b4c5d6e7f80912233",
+    "issuedAt": 1757664000,
+    "state": "needs_human",
+    "waitReason": "waiting_on_human",
+    "expectedAvailableAt": null,
+    "cursor": 42,
+    "nextPollSeconds": 20,
+    "resumeCount": 3,
+    "excerptCiphertext": "31496da84eaf555ca27c03c45090635326a83656d39ecbec65df6047d78d7235bc18f5006c3c626401117d537d56b9b0f5077a95480def3b27946bf8476987e5837e30cf378e942e1e",
+    "excerptNonce": "0f1e2d3c4b5a69788796a5b4",
+    "lastCommand": null,
+    "mac": "e8112d353324ca49e87ca5c36aa2148ee8cbf6c79d41ea21f4b4429ef177c480"
   }
 }

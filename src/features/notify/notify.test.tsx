@@ -1,4 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { useState } from "react";
+import type { JSX } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const invoke = vi.hoisted(() => vi.fn());
@@ -8,7 +10,19 @@ import type { NotifyChannelView, NotifyView } from "../../types/ipc";
 import { BARK_DEFAULT_SERVER, MAIL_PORTS, fill } from "./fields";
 import { SettingsSheet } from "../settings/SettingsSheet";
 import { NotifySection } from "./NotifySection";
+import type { NotifyMode } from "./NotifySection";
 import { useNotify } from "./store";
+
+/** The page as the sheet hosts it: the sheet owns which view is showing. */
+function Page({ start = "list" }: { start?: NotifyMode }): JSX.Element {
+  const [mode, setMode] = useState<NotifyMode>(start);
+  return <NotifySection mode={mode} onMode={setMode} />;
+}
+
+/** Opens a channel's row, which is a line until clicked. */
+async function open(name: RegExp): Promise<void> {
+  fireEvent.click(await screen.findByRole("button", { name, expanded: false }));
+}
 
 function channel(overrides: Partial<NotifyChannelView> = {}): NotifyChannelView {
   return {
@@ -85,6 +99,25 @@ describe("filling in a channel's form", () => {
     if (filled.state !== "ready" || filled.connection.kind !== "email") return;
     expect(filled.connection.password).toBe("abcd efgh ijkl mnop");
     expect(filled.connection.security).toBe("startTls");
+  });
+
+  it("sends from the account itself when the sender is left blank", () => {
+    const filled = fill(
+      "email",
+      {
+        host: "smtp.example.com",
+        port: "465",
+        username: "leanne@example.com",
+        password: "hunter2",
+        from: "  ",
+        to: "b@example.com",
+      },
+      "tls",
+    );
+
+    expect(filled.state).toBe("ready");
+    if (filled.state !== "ready" || filled.connection.kind !== "email") return;
+    expect(filled.connection.from).toBe("leanne@example.com");
   });
 });
 
@@ -174,7 +207,7 @@ describe("the notification group", () => {
 
   it("names a channel by its host, never by the address that reaches it", async () => {
     answerWith([channel({ hint: "qyapi.weixin.qq.com" })]);
-    render(<NotifySection />);
+    render(<Page />);
 
     await screen.findByText(/qyapi\.weixin\.qq\.com/);
     // The webhook address is a credential. Nothing on this side has ever been given it.
@@ -183,7 +216,7 @@ describe("the notification group", () => {
 
   it("says a channel's state to assistive technology, not only through the knob's position", async () => {
     answerWith([channel({ enabled: false })]);
-    render(<NotifySection />);
+    render(<Page />);
 
     const toggle = await screen.findByRole("switch", { name: /Team/ });
     expect(toggle.getAttribute("aria-checked")).toBe("false");
@@ -199,14 +232,17 @@ describe("the notification group", () => {
         },
       }),
     ]);
-    render(<NotifySection />);
+    render(<Page />);
 
+    // Closed, the row shows the failure only as a dot; the words are one click away.
+    expect(screen.queryByText(/could not be reached/)).toBeNull();
+    await open(/Team/);
     expect(await screen.findByText(/could not be reached/)).toBeTruthy();
   });
 
   it("refuses a half-filled form instead of storing part of it", async () => {
     answerWith([]);
-    render(<NotifySection />);
+    render(<Page />);
 
     fireEvent.click(await screen.findByText("Add a channel"));
     fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Phone" } });
@@ -219,7 +255,7 @@ describe("the notification group", () => {
 
   it("sends a new channel's details once, and the service's default is left to Rust", async () => {
     answerWith([]);
-    render(<NotifySection />);
+    render(<Page />);
 
     fireEvent.click(await screen.findByText("Add a channel"));
     fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Phone" } });
@@ -239,9 +275,10 @@ describe("the notification group", () => {
 
   it("lets a channel be renamed without its details being typed out again", async () => {
     answerWith([channel()]);
-    render(<NotifySection />);
+    render(<Page />);
 
-    fireEvent.click(await screen.findByText("Edit"));
+    await open(/Team/);
+    fireEvent.click(screen.getByText("Edit"));
     fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Group" } });
     fireEvent.click(screen.getByText("Save"));
 
@@ -254,9 +291,10 @@ describe("the notification group", () => {
 
   it("tells the reader what an empty box means before showing them the boxes", async () => {
     answerWith([channel()]);
-    render(<NotifySection />);
+    render(<Page />);
 
-    fireEvent.click(await screen.findByText("Edit"));
+    await open(/Team/);
+    fireEvent.click(screen.getByText("Edit"));
     const form = screen.getByTestId("notify-form");
     const said = form.textContent.indexOf("Leave the boxes below empty");
     const firstBox = form.textContent.indexOf("Webhook address");
@@ -270,7 +308,7 @@ describe("the notification group", () => {
     // Password managers ignore `off` but honour `new-password`; an autofilled field would
     // silently replace a working channel's details.
     answerWith([]);
-    render(<NotifySection />);
+    render(<Page />);
 
     fireEvent.click(await screen.findByText("Add a channel"));
     fireEvent.click(screen.getByText("E-mail"));
@@ -280,11 +318,42 @@ describe("the notification group", () => {
     expect(screen.getByLabelText("Port").getAttribute("autocomplete")).toBe("off");
   });
 
+  it("shows the form instead of the list, never under it", async () => {
+    answerWith([channel()]);
+    render(<Page />);
+
+    await screen.findByRole("switch", { name: /Team/ });
+    fireEvent.click(screen.getByText("Add a channel"));
+
+    // The list is gone while the form shows: the two never stack into one tall page.
+    expect(screen.getByTestId("notify-form")).toBeTruthy();
+    expect(screen.queryByRole("switch", { name: /Team/ })).toBeNull();
+
+    fireEvent.click(screen.getByText("Cancel"));
+    await screen.findByRole("switch", { name: /Team/ });
+    expect(screen.queryByTestId("notify-form")).toBeNull();
+  });
+
+  it("puts the mail host and port on one line and everything else on its own", async () => {
+    answerWith([]);
+    render(<Page />);
+
+    fireEvent.click(await screen.findByText("Add a channel"));
+    fireEvent.click(screen.getByText("E-mail"));
+
+    const half = (label: string): boolean =>
+      screen.getByLabelText(label).closest("label")?.className.includes("half") === true;
+    expect(half("Server")).toBe(true);
+    expect(half("Port")).toBe(true);
+    expect(half("User name")).toBe(false);
+  });
+
   it("removes a channel only after a second press", async () => {
     answerWith([channel()]);
-    render(<NotifySection />);
+    render(<Page />);
 
-    fireEvent.click(await screen.findByText("Remove"));
+    await open(/Team/);
+    fireEvent.click(screen.getByText("Remove"));
     expect(invoke).not.toHaveBeenCalledWith("remove_notify_channel", expect.anything());
 
     fireEvent.click(screen.getByText("Remove it"));

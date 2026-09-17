@@ -136,33 +136,48 @@ impl std::fmt::Debug for Preview {
 /// The longest excerpt of a preview the interface is given, in characters.
 const PREVIEW_EXCERPT_CHARS: usize = 60;
 
+/// The longest excerpt of an agent message, in characters (BATCH-07, user 2026-09-16).
+///
+/// Longer than a preview because this one has to be read, not just recognised: the user answers
+/// it from a phone. Still short enough that a whole code block cannot ride out on it.
+const MESSAGE_EXCERPT_CHARS: usize = 300;
+
 impl Preview {
     /// The message as one line, cut to [`PREVIEW_EXCERPT_CHARS`], or `None` when it is blank.
-    ///
-    /// Runs of whitespace - line breaks included - collapse to one space, so a pasted
-    /// paragraph reads as a title would. The cut is marked with an ellipsis.
     fn excerpt(&self) -> Option<String> {
-        let mut words = self.0.split_whitespace();
-        let mut line = String::new();
-        for word in &mut words {
-            if !line.is_empty() {
-                line.push(' ');
-            }
-            line.push_str(word);
-            if line.chars().count() > PREVIEW_EXCERPT_CHARS {
-                break;
-            }
-        }
-        if line.is_empty() {
-            return None;
-        }
-        if line.chars().count() > PREVIEW_EXCERPT_CHARS {
-            let mut cut: String = line.chars().take(PREVIEW_EXCERPT_CHARS).collect();
-            cut.push('…');
-            return Some(cut);
-        }
-        Some(line)
+        crate::text::one_line(&self.0, PREVIEW_EXCERPT_CHARS)
     }
+}
+
+/// An agent message as the server sends it. Same discipline as [`Preview`]: its `Debug` says
+/// nothing, so a captured DTO cannot quote the session.
+#[derive(Deserialize)]
+#[serde(transparent)]
+pub(crate) struct Message(String);
+
+impl std::fmt::Debug for Message {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Message(..)")
+    }
+}
+
+impl Message {
+    fn excerpt(&self) -> Option<String> {
+        crate::text::one_line(&self.0, MESSAGE_EXCERPT_CHARS)
+    }
+}
+
+/// One entry of a turn. **Only the agent's own message is modelled**: commands, file changes,
+/// tool calls and reasoning are session content and must not be materialised, so every other
+/// kind lands on `Other` and keeps nothing.
+#[derive(Debug, Deserialize)]
+#[serde(tag = "type", rename_all = "camelCase")]
+pub(crate) enum TurnItemDto {
+    AgentMessage {
+        text: Message,
+    },
+    #[serde(other)]
+    Other,
 }
 
 /// The tagged union the server uses for a thread's runtime status.
@@ -206,6 +221,9 @@ pub(crate) struct TurnDto {
     pub started_at: Option<i64>,
     #[serde(default)]
     pub completed_at: Option<i64>,
+    /// Read only to find the agent's last message; see [`TurnItemDto`].
+    #[serde(default)]
+    pub items: Vec<TurnItemDto>,
 }
 
 /// A turn's final state, exactly the server's four values plus an escape hatch.
@@ -369,7 +387,7 @@ impl From<ThreadStatusDto> for ThreadStatus {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct TurnRecord {
     pub id: String,
     pub status: TurnStatus,
@@ -378,6 +396,26 @@ pub struct TurnRecord {
     pub error: Option<TurnErrorKind>,
     pub started_at: Option<i64>,
     pub completed_at: Option<i64>,
+    /// A one-line excerpt of the agent's last message in this turn, at most
+    /// [`MESSAGE_EXCERPT_CHARS`]. `None` when the turn has no agent message, when the items were
+    /// not loaded, or when the message is blank - **never an empty string**, which would read as
+    /// "the agent said nothing".
+    pub agent_excerpt: Option<String>,
+}
+
+/// Hand-written for the same reason [`ThreadSummary`]'s is: `{:?}` ends up in error details, and
+/// the excerpt is session content. Deriving `Debug` here would undo the redaction above.
+impl std::fmt::Debug for TurnRecord {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TurnRecord")
+            .field("id", &self.id)
+            .field("status", &self.status)
+            .field("error", &self.error)
+            .field("started_at", &self.started_at)
+            .field("completed_at", &self.completed_at)
+            .field("agent_excerpt", &self.agent_excerpt.as_ref().map(|_| ".."))
+            .finish()
+    }
 }
 
 impl From<TurnDto> for TurnRecord {
@@ -391,6 +429,16 @@ impl From<TurnDto> for TurnRecord {
                 .map(TurnErrorKind::from),
             started_at: dto.started_at,
             completed_at: dto.completed_at,
+            // The last one wins: a turn may say several things, and what the user is answering
+            // is the last of them.
+            agent_excerpt: dto
+                .items
+                .iter()
+                .filter_map(|item| match item {
+                    TurnItemDto::AgentMessage { text } => text.excerpt(),
+                    TurnItemDto::Other => None,
+                })
+                .next_back(),
         }
     }
 }
@@ -840,16 +888,115 @@ mod tests {
     }
 
     #[test]
-    fn a_turn_completed_notification_is_read_without_its_items() {
+    fn a_turn_completed_notification_materialises_the_excerpt_and_nothing_else() {
+        // BATCH-07 replaced `a_turn_completed_notification_is_read_without_its_items`. That test
+        // guarded "no session content is materialised at all". One bounded excerpt is now
+        // allowed (FR-REMOTE-016), so the guard is narrowed rather than dropped: everything
+        // except the agent's own words must still be thrown away.
         let params: TurnCompletedParams = parse(
-            r#"{"threadId":"th","turn":{"id":"t2","status":"completed","items":[{"type":"agentMessage",
-                "id":"m","text":"OK"}]}}"#,
+            r#"{"threadId":"th","turn":{"id":"t2","status":"completed","items":[
+                {"type":"commandExecution","id":"c","command":"rm -rf /tmp/secret",
+                 "cwd":"/Users/someone/private"},
+                {"type":"fileChange","id":"f","diff":"--- a/secret.rs"},
+                {"type":"reasoning","id":"r","text":"the private chain of thought"},
+                {"type":"agentMessage","id":"m","text":"OK"}]}}"#,
         )
         .expect("payload parses");
 
         assert_eq!(params.thread_id, "th");
-        assert!(!format!("{params:?}").contains("agentMessage"));
-        assert_eq!(TurnRecord::from(params.turn).status, TurnStatus::Completed);
+        let record = TurnRecord::from(params.turn);
+        assert_eq!(record.status, TurnStatus::Completed);
+        assert_eq!(record.agent_excerpt.as_deref(), Some("OK"));
+
+        // Nothing else survived the parse, in the record or in a captured debug form.
+        let captured = format!("{record:?}");
+        for content in [
+            "rm -rf",
+            "/Users/someone",
+            "secret.rs",
+            "chain of thought",
+            // Not even the excerpt itself: the record's debug form redacts it.
+            "OK",
+        ] {
+            assert!(
+                !captured.contains(content),
+                "`{content}` must not survive into a turn record: {captured}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_last_thing_the_agent_said_is_the_one_kept() {
+        let record = turn_with(
+            r#"{"type":"agentMessage","id":"a","text":"first"},
+               {"type":"commandExecution","id":"c","command":"ls"},
+               {"type":"agentMessage","id":"b","text":"second"}"#,
+        );
+        assert_eq!(record.agent_excerpt.as_deref(), Some("second"));
+    }
+
+    #[test]
+    fn an_agent_message_is_folded_to_one_line_and_cut_by_characters() {
+        let record =
+            turn_with(r#"{"type":"agentMessage","id":"a","text":"  I will\n\n  refactor   it "}"#);
+        assert_eq!(record.agent_excerpt.as_deref(), Some("I will refactor it"));
+
+        // Wide characters cost one each, so a Chinese answer is not cut three times too early.
+        let wide = "字".repeat(MESSAGE_EXCERPT_CHARS + 50);
+        let record = turn_with(&format!(
+            r#"{{"type":"agentMessage","id":"a","text":"{wide}"}}"#
+        ));
+        let excerpt = record.agent_excerpt.expect("not blank");
+        assert_eq!(excerpt.chars().count(), MESSAGE_EXCERPT_CHARS + 1);
+        assert!(excerpt.ends_with('…'));
+
+        // Exactly at the cap is returned whole, with no ellipsis.
+        let exact = "a".repeat(MESSAGE_EXCERPT_CHARS);
+        let record = turn_with(&format!(
+            r#"{{"type":"agentMessage","id":"a","text":"{exact}"}}"#
+        ));
+        assert_eq!(record.agent_excerpt.as_deref(), Some(exact.as_str()));
+    }
+
+    /// `None`, never `Some("")`: an empty string would read as "the agent said nothing".
+    #[test]
+    fn nothing_to_quote_is_absent_rather_than_empty() {
+        assert_eq!(
+            turn_with(r#"{"type":"agentMessage","id":"a","text":" \n\t"}"#).agent_excerpt,
+            None
+        );
+        assert_eq!(
+            turn_with(r#"{"type":"commandExecution","id":"c","command":"ls"}"#).agent_excerpt,
+            None
+        );
+        assert_eq!(turn_with("").agent_excerpt, None);
+
+        // Items absent entirely - the shape `thread/list` returns - is also `None`.
+        let dto: TurnDto = parse(r#"{"id":"t","status":"completed"}"#).expect("parses");
+        assert_eq!(TurnRecord::from(dto).agent_excerpt, None);
+    }
+
+    /// The carrier type keeps the same discipline as `Preview`: it cannot quote itself.
+    #[test]
+    fn a_message_never_quotes_itself_in_a_debug_form() {
+        let dto: TurnDto = parse(
+            r#"{"id":"t","status":"completed","items":[{"type":"agentMessage","id":"m",
+               "text":"do not print me"}]}"#,
+        )
+        .expect("parses");
+        let captured = format!("{dto:?}");
+
+        assert!(captured.contains("Message(..)"));
+        assert!(!captured.contains("do not print me"), "{captured}");
+    }
+
+    /// Builds a completed turn from a list of item objects, so each test spoils one thing.
+    fn turn_with(items: &str) -> TurnRecord {
+        let dto: TurnDto = parse(&format!(
+            r#"{{"id":"t","status":"completed","items":[{items}]}}"#
+        ))
+        .expect("payload parses");
+        TurnRecord::from(dto)
     }
 
     #[test]

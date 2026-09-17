@@ -66,6 +66,9 @@ pub enum ErrorCode {
     NotificationRejected,
     /// The remote bridge answered and refused the exchange; not a network failure.
     RemoteBridgeRejected,
+    /// The reset feed answered `200` with a body that is not the shape its own contract
+    /// promises; not a network failure, and not something a retry fixes.
+    ResetFeedUnreadable,
     /// Unexpected internal failure. Carries a redacted detail for diagnosis.
     Internal,
 }
@@ -101,6 +104,7 @@ impl ErrorCode {
             Self::ThreadUnavailable => "thread_unavailable",
             Self::NotificationRejected => "notification_rejected",
             Self::RemoteBridgeRejected => "remote_bridge_rejected",
+            Self::ResetFeedUnreadable => "reset_feed_unreadable",
             Self::Internal => "internal",
         }
     }
@@ -136,6 +140,7 @@ impl ErrorCode {
             "thread_unavailable" => Self::ThreadUnavailable,
             "notification_rejected" => Self::NotificationRejected,
             "remote_bridge_rejected" => Self::RemoteBridgeRejected,
+            "reset_feed_unreadable" => Self::ResetFeedUnreadable,
             "internal" => Self::Internal,
             _ => return None,
         })
@@ -169,6 +174,8 @@ pub enum Phase {
     Notify,
     /// Exchanging a status receipt for a command with the user's own bridge.
     Remote,
+    /// Reading the public reset feed the user switched on.
+    Resets,
     /// Local metadata and settings persistence.
     Storage,
     /// Placing the window against a screen edge.
@@ -193,6 +200,7 @@ impl Phase {
             Self::Autorun => "autorun",
             Self::Notify => "notify",
             Self::Remote => "remote",
+            Self::Resets => "resets",
         }
     }
 }
@@ -385,6 +393,7 @@ mod tests {
             ErrorCode::ThreadUnavailable,
             ErrorCode::NotificationRejected,
             ErrorCode::RemoteBridgeRejected,
+            ErrorCode::ResetFeedUnreadable,
             ErrorCode::Internal,
         ];
         let mut seen = std::collections::BTreeSet::new();

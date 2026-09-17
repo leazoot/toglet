@@ -1,0 +1,60 @@
+/* The reset banner: the same line as the panel's status bar, sitting above it. */
+.line {
+  composes: footer from "../dock/Panel.module.css";
+  gap: 8px;
+}
+
+.status {
+  composes: status from "../dock/Panel.module.css";
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.asOf {
+  color: var(--tg-text-tertiary);
+}
+
+/* The gauge: how much of the average interval has passed, drawn on a 14px ring. */
+.gauge {
+  width: var(--tg-reset-gauge-size);
+  height: var(--tg-reset-gauge-size);
+  flex: none;
+}
+
+.track {
+  stroke: var(--tg-line-track);
+}
+
+/* No figure to draw: the same dashed track the quota ring uses when it cannot read. */
+.trackUnknown {
+  stroke: var(--tg-line-track);
+  stroke-dasharray: var(--tg-ring-track-dash);
+}
+
+.arc {
+  transition: stroke-dasharray var(--tg-duration-quota) var(--tg-ease-standard);
+}
+
+.ok {
+  stroke: var(--tg-quota-healthy);
+}
+
+.warn {
+  stroke: var(--tg-quota-warn);
+}
+
+.bad {
+  stroke: var(--tg-quota-low);
+}
+
+.mute {
+  stroke: var(--tg-brand);
+}
+
+/* The dot in the middle of a full ring: a reset happened today. */
+.core {
+  fill: var(--tg-quota-healthy);
+}

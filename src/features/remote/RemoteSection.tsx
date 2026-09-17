@@ -8,6 +8,7 @@ import { useEffect, useState } from "react";
 import type { JSX } from "react";
 
 import { t } from "../../i18n";
+import { Toggle } from "../settings/controls";
 import { cx } from "../../styles/classes";
 import { actionKey, failureKey, outcomeKey } from "./reason";
 import { useRemote } from "./store";
@@ -29,6 +30,13 @@ export function RemoteSection(): JSX.Element {
   // True only for a freshly generated, unsaved secret; a stored secret is never shown.
   const [shown, setShown] = useState(false);
   const [copied, setCopied] = useState(false);
+  // Its own flag: sharing the secret's would relabel that button when this one is pressed.
+  const [keyCopied, setKeyCopied] = useState(false);
+  // A secret that was just generated and saved, kept on screen until dismissed so it can be typed
+  // into the phone. Only ever a value generated in this session: a stored secret still has no way
+  // out of Rust, and a typed one is already in the user's hands.
+  const [handover, setHandover] = useState<string | null>(null);
+  const [handoverCopied, setHandoverCopied] = useState(false);
 
   useEffect(() => {
     void load();
@@ -48,6 +56,8 @@ export function RemoteSection(): JSX.Element {
     ? endpoint.trim() !== "" || secret.trim() !== ""
     : endpoint.trim() !== "" && secret.trim() !== "";
   const half = !view.paired && (endpoint.trim() !== "") !== (secret.trim() !== "");
+  // Captured so the null check narrows inside the handler below.
+  const statusKey = view.statusKey;
 
   const clear = (): void => {
     setEndpoint("");
@@ -55,6 +65,7 @@ export function RemoteSection(): JSX.Element {
     setRepairing(false);
     setShown(false);
     setCopied(false);
+    setKeyCopied(false);
   };
 
   return (
@@ -152,7 +163,14 @@ export function RemoteSection(): JSX.Element {
                   ...(endpoint.trim() === "" ? {} : { endpoint: endpoint.trim() }),
                   ...(secret.trim() === "" ? {} : { secret: secret.trim() }),
                 }).then((ok) => {
-                  if (ok) clear();
+                  if (!ok) return;
+                  // Generated, never typed: the user has had no other chance to record it, and
+                  // losing it means generating another one - which invalidates the bridge's key.
+                  if (shown && secret.trim() !== "") {
+                    setHandover(secret.trim());
+                    setHandoverCopied(false);
+                  }
+                  clear();
                 });
               }}
             >
@@ -163,10 +181,22 @@ export function RemoteSection(): JSX.Element {
       ) : (
         <>
           {failure !== null && <Failure code={failure.error?.code ?? null} />}
-          <div className={styles["actions"]}>
+          {/* Order follows the notify sheet: the main action first, the destructive one at the
+              far end, where `chipRemove` pushes it. */}
+          <div className={styles["rowActions"]}>
             <button
               type="button"
-              className={styles["action"]}
+              className={styles["chipPrimary"]}
+              disabled={busy}
+              onClick={() => {
+                void save({ enabled: !view.enabled });
+              }}
+            >
+              {t(view.enabled ? "remote.turnOff" : "remote.turnOn")}
+            </button>
+            <button
+              type="button"
+              className={styles["chip"]}
               disabled={busy}
               onClick={() => {
                 // The address is prefilled for editing; the secret never comes back.
@@ -178,7 +208,7 @@ export function RemoteSection(): JSX.Element {
             </button>
             <button
               type="button"
-              className={styles["action"]}
+              className={styles["chipRemove"]}
               disabled={busy}
               onClick={() => {
                 clear();
@@ -187,18 +217,71 @@ export function RemoteSection(): JSX.Element {
             >
               {t("remote.forget")}
             </button>
-            <button
-              type="button"
-              className={styles["primary"]}
-              disabled={busy}
-              onClick={() => {
-                void save({ enabled: !view.enabled });
-              }}
-            >
-              {t(view.enabled ? "remote.turnOff" : "remote.turnOn")}
-            </button>
           </div>
         </>
+      )}
+
+      {view.paired && !pairing && (
+        <Toggle
+          label={t("remote.excerpt")}
+          value={view.shareExcerpt}
+          disabled={busy}
+          note={t("remote.excerptNote")}
+          onPick={(shareExcerpt) => {
+            void save({ enabled: view.enabled, shareExcerpt });
+          }}
+        />
+      )}
+
+      {view.paired && !pairing && statusKey !== null && (
+        <div className={styles["field"]}>
+          <div className={styles["fieldHead"]}>
+            <span className={styles["fieldLabel"]}>{t("remote.statusKey")}</span>
+            <span className={styles["fieldTools"]}>
+              <button
+                type="button"
+                className={styles["tool"]}
+                onClick={() => {
+                  void copy(statusKey).then(setKeyCopied);
+                }}
+              >
+                {t(keyCopied ? "remote.copied" : "remote.copy")}
+              </button>
+            </span>
+          </div>
+          <code className={styles["key"]}>{masked(statusKey)}</code>
+          <p className={styles["hint"]}>{t("remote.statusKeyNote")}</p>
+        </div>
+      )}
+
+      {handover !== null && (
+        <div className={styles["field"]}>
+          <div className={styles["fieldHead"]}>
+            <span className={styles["fieldLabel"]}>{t("remote.handover")}</span>
+            <span className={styles["fieldTools"]}>
+              <button
+                type="button"
+                className={styles["tool"]}
+                onClick={() => {
+                  void copy(handover).then(setHandoverCopied);
+                }}
+              >
+                {t(handoverCopied ? "remote.copied" : "remote.copy")}
+              </button>
+              <button
+                type="button"
+                className={styles["tool"]}
+                onClick={() => {
+                  setHandover(null);
+                }}
+              >
+                {t("remote.handoverDone")}
+              </button>
+            </span>
+          </div>
+          <code className={styles["handoverKey"]}>{handover}</code>
+          <p className={styles["hint"]}>{t("remote.handoverNote")}</p>
+        </div>
       )}
 
       <p className={styles["limit"]}>{t("remote.limitAsleep")}</p>
@@ -232,6 +315,16 @@ function Connection({
 }
 
 /**
+ * First and last four, with a middle of fixed width. Enough to tell one key from another at a
+ * glance; the value itself leaves only through the copy button, and the fixed width means the
+ * length is not given away either.
+ */
+function masked(key: string): string {
+  const hidden = "*".repeat(8);
+  return key.length <= 8 ? hidden : `${key.slice(0, 4)}${hidden}${key.slice(-4)}`;
+}
+
+/**
  * 18 random bytes as base64url: 24 characters, within the alphabet and minimum length Rust
  * accepts.
  */
@@ -245,12 +338,13 @@ function freshSecret(): string {
 }
 
 /**
- * Copies a just-generated, unsaved secret so it can be entered on the phone. A saved secret has
- * no path out of Rust.
+ * Copies either a just-generated, unsaved secret - to be entered on the phone - or the bridge's
+ * status key. A saved secret still has no path out of Rust; the status key is a one-way
+ * derivation of it whose whole purpose is to be pasted onto the bridge.
  */
-async function copy(secret: string): Promise<boolean> {
+async function copy(value: string): Promise<boolean> {
   try {
-    await navigator.clipboard.writeText(secret);
+    await navigator.clipboard.writeText(value);
     return true;
   } catch {
     // No clipboard permission; the field is readable, so it can still be copied by hand.

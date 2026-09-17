@@ -1,6 +1,7 @@
 // The settings sheet, with only settings whose behaviour exists. Accounts are removed here, with
 // an explicit confirmation; removing the one Codex is using signs Codex out. Three pages
-// (settings, notification channels, remote control); the header shows "Done" or "Back".
+// (settings, notification channels, remote control, reset alerts); the header shows "Done" or
+// "Back".
 
 import { useEffect, useState } from "react";
 import type { JSX } from "react";
@@ -18,8 +19,11 @@ import type { Loadable } from "../../types/load";
 import type { Removal } from "../accounts/store";
 import { NotifyRow } from "../notify/NotifyRow";
 import { NotifySection } from "../notify/NotifySection";
+import type { NotifyMode } from "../notify/NotifySection";
 import { RemoteRow } from "../remote/RemoteRow";
 import { RemoteSection } from "../remote/RemoteSection";
+import { ResetsRow } from "../resets/ResetsRow";
+import { ResetsSection } from "../resets/ResetsSection";
 import { Segmented, Toggle } from "./controls";
 import styles from "./SettingsSheet.module.css";
 
@@ -61,8 +65,15 @@ export function SettingsSheet({
   onDismissRemoval,
   onPinned,
 }: SettingsSheetProps): JSX.Element {
-  const [page, setPage] = useState<"settings" | "notify" | "remote">("settings");
+  const [page, setPage] = useState<
+    "settings" | "notify" | "notifyAdd" | "notifyEdit" | "remote" | "resets"
+  >("settings");
   const onSettings = page === "settings";
+  // The channel form is a page of its own, one level below the list (user 2026-09-17): a mail
+  // form under three channels was taller than the panel can be.
+  const onNotify = page === "notify" || page === "notifyAdd" || page === "notifyEdit";
+  const notifyMode: NotifyMode =
+    page === "notifyAdd" ? "add" : page === "notifyEdit" ? "edit" : "list";
 
   // The cleanup matters: if the sheet unmounts with a pin set, the panel would stay open for good.
   useEffect(() => {
@@ -72,7 +83,17 @@ export function SettingsSheet({
     };
   }, [onSettings, onPinned]);
   const label = t(
-    page === "notify" ? "notify.section" : page === "remote" ? "remote.section" : "settings.title",
+    page === "notify"
+      ? "notify.section"
+      : page === "notifyAdd"
+        ? "notify.add"
+        : page === "notifyEdit"
+          ? "notify.editTitle"
+          : page === "remote"
+            ? "remote.section"
+            : page === "resets"
+              ? "resets.section"
+              : "settings.title",
   );
 
   return (
@@ -90,7 +111,8 @@ export function SettingsSheet({
               type="button"
               className={styles["close"]}
               onClick={() => {
-                setPage("settings");
+                // From the form, Back is one level: to the list, not to the settings.
+                setPage(page === "notifyAdd" || page === "notifyEdit" ? "notify" : "settings");
               }}
             >
               {t("settings.back")}
@@ -98,8 +120,16 @@ export function SettingsSheet({
           )}
         </div>
 
-        {page === "notify" && <NotifySection />}
+        {onNotify && (
+          <NotifySection
+            mode={notifyMode}
+            onMode={(mode) => {
+              setPage(mode === "add" ? "notifyAdd" : mode === "edit" ? "notifyEdit" : "notify");
+            }}
+          />
+        )}
         {page === "remote" && <RemoteSection />}
+        {page === "resets" && <ResetsSection />}
 
         {onSettings && settings.state === "loading" && (
           <p className={styles["message"]}>{t("settings.loading")}</p>
@@ -229,6 +259,11 @@ export function SettingsSheet({
               <RemoteRow
                 onOpen={() => {
                   setPage("remote");
+                }}
+              />
+              <ResetsRow
+                onOpen={() => {
+                  setPage("resets");
                 }}
               />
             </div>

@@ -611,6 +611,30 @@ impl Machine {
         }
     }
 
+    /// A sentence typed on the phone, for a session that stopped to ask something.
+    ///
+    /// [`UserEvent::Resume`] re-arms and waits for the bound thread to produce a trigger. A
+    /// thread parked on a question never produces one - it is blocked waiting for the answer -
+    /// so a sentence takes the one path that starts a turn directly.
+    ///
+    /// The continuation cap is deliberately not spent here: `max_resumes` bounds the
+    /// continuations Toglet starts by itself, and a person asked for this one.
+    pub fn apply_steer(&mut self) -> Outcome {
+        if !matches!(
+            self.state,
+            State::NeedsHuman | State::Paused | State::RoundCompleted | State::Stopped
+        ) {
+            return Outcome::Ignored(Ignored::NotApplicable);
+        }
+        // Nothing has been continued on this plan yet, so there is no account to steer on. The
+        // ordinary path picks one, and the sentence rides along until a turn really starts.
+        let Some(account_id) = self.executing_account_id.clone() else {
+            return self.arm();
+        };
+        self.clear_cycle();
+        self.transition(State::Resuming, None, Action::Resume { account_id })
+    }
+
     fn armed(&mut self, fact: Fact) -> Outcome {
         match fact {
             Fact::TurnEnded {
@@ -2146,6 +2170,7 @@ mod tests {
                 error,
                 started_at: None,
                 completed_at: None,
+                agent_excerpt: None,
             }
         }
         let cases = [

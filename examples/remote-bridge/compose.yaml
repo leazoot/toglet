@@ -15,6 +15,11 @@ services:
       # All interfaces inside the container; the host only sees the loopback port below.
       HOST: "0.0.0.0"
       PORT: "8787"
+      # Authenticates a `/status` read. It is NOT the shared secret: it is
+      # SHA-256("toglet-remote/2 status" + secret), derived on your own machine. One-way, so a
+      # bridge that is taken over still cannot sign a command or open a sealed excerpt.
+      # Without it `/status` refuses every read rather than quietly serving everyone.
+      STATUS_KEY: ${STATUS_KEY:?set STATUS_KEY in .env - see up.sh}
     volumes:
       - ./bridge.mjs:/app/bridge.mjs:ro
     # Loopback only, for a reverse proxy installed on the host. A containerized proxy cannot reach

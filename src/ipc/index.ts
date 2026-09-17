@@ -23,11 +23,12 @@ import type {
   IpcResult,
   NotifyOutcome,
   NotifyView,
+  PanelRect,
   QuotaView,
+  RecoveryOutcome,
   RemoteDraft,
   RemoteView,
   RemovalView,
-  RecoveryOutcome,
   ResetCreditOutcomeView,
   SaveChannelRequest,
   SettingsPatch,
@@ -35,6 +36,9 @@ import type {
   SwitchView,
   ThreadListView,
   TrayLabels,
+  ResetAnnouncementView,
+  ResetsDraft,
+  ResetsView,
 } from "../types/ipc";
 
 /**
@@ -101,11 +105,17 @@ export function consumeResetCredit(
 }
 
 /**
- * Tells Rust whether the panel is open, so it can decide click-through for the transparent strip
- * (a window passing the pointer through gets no pointer events to decide with).
+ * Tells Rust whether the panel is open and where it is, so it can decide click-through for the
+ * transparent strip (a window passing the pointer through gets no pointer events to decide with).
+ *
+ * The window is a full-height strip, so the rectangle matters: without it an open panel claims the
+ * whole column and swallows clicks meant for whatever is behind it.
  */
-export function setDockExpansion(expanded: boolean): Promise<IpcResult<null>> {
-  return call<null>("set_dock_expansion", { expanded });
+export function setDockExpansion(
+  expanded: boolean,
+  panel: PanelRect | null,
+): Promise<IpcResult<null>> {
+  return call<null>("set_dock_expansion", { expanded, panel });
 }
 
 /**
@@ -357,5 +367,34 @@ export function deliverNotification(
     title,
     body,
     channelId: channelId ?? null,
+  });
+}
+
+// ---------------------------------------------------------------- reset alerts (BATCH-08)
+
+export function readResets(): Promise<IpcResult<ResetsView>> {
+  return call<ResetsView>("read_resets");
+}
+
+export function saveResets(draft: ResetsDraft): Promise<IpcResult<ResetsView>> {
+  return call<ResetsView>("save_resets", { draft });
+}
+
+/** Opens the feed's site: the credit its terms ask for. A constant address on the Rust side. */
+export function openResetsSite(): Promise<IpcResult<null>> {
+  return call<null>("open_resets_site");
+}
+
+export function onResetsState(handler: (view: ResetsView) => void): Promise<() => void> {
+  return listen<ResetsView>("resets://state", (event) => {
+    handler(event.payload);
+  });
+}
+
+export function onResetAnnounced(
+  handler: (event: ResetAnnouncementView) => void,
+): Promise<() => void> {
+  return listen<ResetAnnouncementView>("resets://announced", (event) => {
+    handler(event.payload);
   });
 }

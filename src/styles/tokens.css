@@ -22,6 +22,8 @@
   --tg-bar-add-icon-size: 13px;
   --tg-settings-mark-size: 14px;
   --tg-autorun-mark-size: 12px;
+  /* The reset banner's gauge ring; its `r` lives in components/geometry.ts. */
+  --tg-reset-gauge-size: 14px;
   --tg-spinner-size: 15px;
   --tg-settings-account-row-padding: 3px;
 
@@ -112,7 +114,8 @@
   --tg-settings-row-height: 38px;
   --tg-settings-header-padding: 14px 16px 12px;
   --tg-settings-body-padding: 6px 16px 8px;
-  --tg-notify-row-height: 116px;
+  /* One closed channel row: a settings row plus its 3px of padding above and below. */
+  --tg-notify-row-height: 44px;
   --tg-notify-chip-height: 24px;
   --tg-segmented-radius: 7px;
   --tg-segmented-item-radius: 5px;

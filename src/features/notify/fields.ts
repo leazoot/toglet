@@ -14,6 +14,8 @@ export interface FieldSpec {
   /** Masked in the form. */
   readonly secret: boolean;
   readonly placeholder?: string;
+  /** Short enough to share a line with the next half-width field. */
+  readonly half?: true;
 }
 
 /** Placeholders only; Rust applies the default when the field is left empty. */
@@ -54,11 +56,12 @@ export const FIELDS: Readonly<Record<NotifyChannelKind, readonly FieldSpec[]>> =
   ],
   webhook: [need("url", "notify.field.url")],
   email: [
-    need("host", "notify.field.host"),
-    need("port", "notify.field.port"),
+    { ...need("host", "notify.field.host"), half: true },
+    { ...need("port", "notify.field.port"), half: true },
     need("username", "notify.field.username"),
     { name: "password", label: "notify.field.password", required: true, secret: true },
-    need("from", "notify.field.from"),
+    // Optional: most mailboxes send from the account they sign in with.
+    { name: "from", label: "notify.field.from", required: false, secret: false },
     need("to", "notify.field.to"),
   ],
 };
@@ -127,7 +130,8 @@ export function fill(kind: NotifyChannelKind, values: FormValues, security: Mail
         security,
         username: at("username"),
         password: values["password"] ?? "",
-        from: at("from"),
+        // Left blank, the sender is the account itself; that is how most mailboxes work.
+        from: at("from") === "" ? at("username") : at("from"),
         to: at("to"),
       });
     }

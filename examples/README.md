@@ -22,8 +22,15 @@ command. The bridge only ferries bytes.
 ## The bridge is not trusted, and you should not trust it either
 
 Every command is signed end to end with HMAC-SHA256 against a secret you type into Toglet and
-into the page. The bridge holds neither. If somebody takes over your bridge completely, what
-they can do is **drop your commands** — a denial of service. What they cannot do is forge one.
+into the page. The bridge never sees that secret. If somebody takes over your bridge completely,
+what they can do is **drop your commands** — a denial of service. What they cannot do is forge one.
+
+The bridge does hold one thing: a **status key**, so it can tell your phone from a stranger when
+something reads the last receipt — that receipt may carry a sealed excerpt of your session, and
+handing it to whoever asks is a leak. The status key is `SHA-256("toglet-remote/2 status" +
+secret)`, derived on your computer and one-way, so what sits on the bridge cannot be turned back
+into the secret, cannot sign a command, and cannot open the excerpt (which uses a third key
+again). Losing it lets somebody read your status; it does not let them act.
 
 That property only holds if you keep two things true:
 

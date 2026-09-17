@@ -1,6 +1,10 @@
 // Notification channels page of the settings sheet. Connection details travel one way: Rust
 // only returns a host hint and a label, so editing starts with empty fields and leaving them
 // empty keeps what is stored.
+//
+// Two views, never both (user 2026-09-17): the list, one line per channel that opens on a
+// click; and the form, which replaces the list rather than growing under it, so a mail form
+// with its eight boxes fits the panel on its own.
 
 import { useEffect, useState } from "react";
 import type { JSX } from "react";
@@ -22,6 +26,14 @@ import type { FormValues } from "./fields";
 import { reasonKey } from "./reason";
 import { useNotify } from "./store";
 import styles from "./NotifySection.module.css";
+
+/** Which view is showing. Owned by the sheet, which names the page in its header. */
+export type NotifyMode = "list" | "add" | "edit";
+
+export interface NotifySectionProps {
+  mode: NotifyMode;
+  onMode: (mode: NotifyMode) => void;
+}
 
 const KINDS: readonly { value: NotifyChannelKind; key: MessageKey }[] = [
   { value: "bark", key: "notify.kind.bark" },
@@ -58,7 +70,7 @@ function blank(kind: NotifyChannelKind, id: string | null, label: string): Draft
   };
 }
 
-export function NotifySection(): JSX.Element {
+export function NotifySection({ mode, onMode }: NotifySectionProps): JSX.Element {
   const channels = useNotify((state) => state.channels);
   const busy = useNotify((state) => state.busy);
   const testing = useNotify((state) => state.testing);
@@ -71,6 +83,8 @@ export function NotifySection(): JSX.Element {
 
   const [draft, setDraft] = useState<Draft | null>(null);
   const [pending, setPending] = useState<string | null>(null);
+  /** The one row showing its details and actions; the rest are a line each. */
+  const [expanded, setExpanded] = useState<string | null>(null);
   // Set when Save was pressed on a half-filled form; cleared by the next edit.
   const [incomplete, setIncomplete] = useState(false);
 
@@ -78,8 +92,26 @@ export function NotifySection(): JSX.Element {
     void load();
   }, [load]);
 
+  // The header's Back returns to the list without asking this page: drop the draft with it.
+  // Adjusted during render from the previous prop (react.dev, "storing information from
+  // previous renders"), the same way the dock follows `expanded`.
+  const [seenMode, setSeenMode] = useState(mode);
+  if (mode !== seenMode) {
+    setSeenMode(mode);
+    if (mode === "list") {
+      setDraft(null);
+      setIncomplete(false);
+    }
+  }
+
   const list = channels.state === "ready" ? channels.value.channels : [];
   const full = channels.state === "ready" && list.length >= channels.value.maxChannels;
+
+  const close = (): void => {
+    setDraft(null);
+    setIncomplete(false);
+    onMode("list");
+  };
 
   const submit = (): void => {
     if (draft === null) {
@@ -99,11 +131,36 @@ export function NotifySection(): JSX.Element {
       ...(filled.state === "ready" ? { connection: filled.connection } : {}),
     }).then((saved) => {
       if (saved) {
-        setDraft(null);
-        setIncomplete(false);
+        close();
       }
     });
   };
+
+  const alert =
+    failure === null ? null : (
+      <p className={styles["alert"]} role="alert">
+        {t("notify.commandFailed", { code: failure.error?.code ?? t("notify.reason.unreached") })}
+      </p>
+    );
+
+  if (mode !== "list" && draft !== null) {
+    return (
+      <div className={styles["page"]} data-testid="notify-section">
+        <ChannelForm
+          draft={draft}
+          busy={busy}
+          incomplete={incomplete}
+          onChange={(next) => {
+            setIncomplete(false);
+            setDraft(next);
+          }}
+          onCancel={close}
+          onSubmit={submit}
+        />
+        {alert}
+      </div>
+    );
+  }
 
   return (
     <div className={styles["page"]} data-testid="notify-section">
@@ -113,7 +170,7 @@ export function NotifySection(): JSX.Element {
       {channels.state === "loading" && <p className={sheet["message"]}>{t("panel.loading")}</p>}
       {channels.state === "failed" && <p className={sheet["message"]}>{t("notify.unreadable")}</p>}
 
-      {channels.state === "ready" && list.length === 0 && draft === null && (
+      {channels.state === "ready" && list.length === 0 && (
         <p className={sheet["message"]}>{t("notify.empty")}</p>
       )}
 
@@ -126,7 +183,12 @@ export function NotifySection(): JSX.Element {
               busy={busy}
               testing={testing === channel.id}
               tested={tested[channel.id]}
+              expanded={expanded === channel.id}
               pending={pending === channel.id}
+              onExpand={() => {
+                setPending(null);
+                setExpanded(expanded === channel.id ? null : channel.id);
+              }}
               onPending={setPending}
               onToggle={(enabled) => {
                 void save({ id: channel.id, label: channel.label, enabled });
@@ -137,6 +199,7 @@ export function NotifySection(): JSX.Element {
               onEdit={() => {
                 setIncomplete(false);
                 setDraft(blank(channel.kind, channel.id, channel.label));
+                onMode("edit");
               }}
               onRemove={() => {
                 setPending(null);
@@ -147,41 +210,21 @@ export function NotifySection(): JSX.Element {
         </ul>
       )}
 
-      {draft === null ? (
-        <button
-          type="button"
-          className={styles["add"]}
-          disabled={busy || full || channels.state !== "ready"}
-          onClick={() => {
-            setIncomplete(false);
-            setDraft(blank("bark", null, ""));
-          }}
-        >
-          {t("notify.add")}
-        </button>
-      ) : (
-        <ChannelForm
-          draft={draft}
-          busy={busy}
-          incomplete={incomplete}
-          onChange={(next) => {
-            setIncomplete(false);
-            setDraft(next);
-          }}
-          onCancel={() => {
-            setDraft(null);
-            setIncomplete(false);
-          }}
-          onSubmit={submit}
-        />
-      )}
+      <button
+        type="button"
+        className={styles["add"]}
+        disabled={busy || full || channels.state !== "ready"}
+        onClick={() => {
+          setIncomplete(false);
+          setDraft(blank("bark", null, ""));
+          onMode("add");
+        }}
+      >
+        {t("notify.add")}
+      </button>
 
       {full && <p className={styles["hint"]}>{t("notify.full")}</p>}
-      {failure !== null && (
-        <p className={styles["alert"]} role="alert">
-          {t("notify.commandFailed", { code: failure.error?.code ?? t("notify.reason.unreached") })}
-        </p>
-      )}
+      {alert}
     </div>
   );
 }
@@ -191,7 +234,9 @@ interface ChannelRowProps {
   busy: boolean;
   testing: boolean;
   tested: NotifyOutcome | undefined;
+  expanded: boolean;
   pending: boolean;
+  onExpand: () => void;
   onPending: (channelId: string | null) => void;
   onToggle: (enabled: boolean) => void;
   onTest: () => void;
@@ -199,22 +244,47 @@ interface ChannelRowProps {
   onRemove: () => void;
 }
 
+/** One line: name, service and host, a dot for the last delivery, the switch. Opens on click. */
 function ChannelRow({
   channel,
   busy,
   testing,
   tested,
+  expanded,
   pending,
+  onExpand,
   onPending,
   onToggle,
   onTest,
   onEdit,
   onRemove,
 }: ChannelRowProps): JSX.Element {
+  const failed = lastFailed(channel, tested);
+  const never = tested === undefined && channel.lastDelivery === null;
   return (
     <li className={styles["row"]}>
       <div className={styles["head"]}>
-        <span className={styles["name"]}>{channel.label}</span>
+        <button
+          type="button"
+          className={styles["summary"]}
+          aria-expanded={expanded}
+          onClick={onExpand}
+        >
+          <span className={styles["name"]}>{channel.label}</span>
+          <span className={styles["kind"]}>
+            {t(KIND_NAMES[channel.kind])}
+            {channel.hint === "" ? "" : ` · ${channel.hint}`}
+          </span>
+          {/* Never the only carrier: the opened row says it in words. */}
+          <span
+            className={cx(
+              styles["mark"],
+              never ? styles["markNone"] : failed ? styles["markBad"] : styles["markOk"],
+            )}
+            aria-hidden="true"
+          />
+          <Chevron open={expanded} />
+        </button>
         <button
           type="button"
           role="switch"
@@ -230,60 +300,78 @@ function ChannelRow({
         </button>
       </div>
 
-      <p className={styles["meta"]}>
-        {t(KIND_NAMES[channel.kind])}
-        {channel.hint === "" ? "" : ` · ${channel.hint}`}
-      </p>
-      <p className={cx(styles["meta"], lastFailed(channel, tested) && styles["bad"])}>
-        {lastLine(channel, testing, tested)}
-      </p>
-
-      <div className={styles["rowActions"]}>
-        <button
-          type="button"
-          className={styles["chipPrimary"]}
-          disabled={busy || testing}
-          onClick={onTest}
-        >
-          {t(testing ? "notify.testing" : "notify.test")}
-        </button>
-        <button type="button" className={styles["chip"]} disabled={busy} onClick={onEdit}>
-          {t("notify.edit")}
-        </button>
-        {pending ? (
-          <>
+      {expanded && (
+        <div className={styles["details"]}>
+          <p className={cx(styles["meta"], failed && styles["bad"])}>
+            {lastLine(channel, testing, tested)}
+          </p>
+          <div className={styles["rowActions"]}>
             <button
               type="button"
-              className={styles["chipRemove"]}
-              disabled={busy}
-              onClick={onRemove}
+              className={styles["chipPrimary"]}
+              disabled={busy || testing}
+              onClick={onTest}
             >
-              {t("notify.removeConfirm")}
+              {t(testing ? "notify.testing" : "notify.test")}
             </button>
-            <button
-              type="button"
-              className={styles["chip"]}
-              onClick={() => {
-                onPending(null);
-              }}
-            >
-              {t("notify.cancel")}
+            <button type="button" className={styles["chip"]} disabled={busy} onClick={onEdit}>
+              {t("notify.edit")}
             </button>
-          </>
-        ) : (
-          <button
-            type="button"
-            className={styles["chipRemove"]}
-            disabled={busy}
-            onClick={() => {
-              onPending(channel.id);
-            }}
-          >
-            {t("notify.remove")}
-          </button>
-        )}
-      </div>
+            {pending ? (
+              <>
+                <button
+                  type="button"
+                  className={styles["chipRemove"]}
+                  disabled={busy}
+                  onClick={onRemove}
+                >
+                  {t("notify.removeConfirm")}
+                </button>
+                <button
+                  type="button"
+                  className={styles["chip"]}
+                  onClick={() => {
+                    onPending(null);
+                  }}
+                >
+                  {t("notify.cancel")}
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                className={styles["chipRemove"]}
+                disabled={busy}
+                onClick={() => {
+                  onPending(channel.id);
+                }}
+              >
+                {t("notify.remove")}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
     </li>
+  );
+}
+
+function Chevron({ open }: { open: boolean }): JSX.Element {
+  return (
+    <svg
+      viewBox="0 0 12 12"
+      className={cx(styles["chevron"], open && styles["chevronOpen"])}
+      aria-hidden="true"
+    >
+      <path
+        d="M4.5 2.5 L8 6 L4.5 9.5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }
 
@@ -396,30 +484,36 @@ function ChannelForm({
       {/* Placed above the fields it explains. */}
       {draft.id !== null && <p className={styles["hint"]}>{t("notify.keepDetails")}</p>}
 
-      {FIELDS[draft.kind].map((field) => (
-        <label key={field.name} className={styles["field"]}>
-          <span className={styles["fieldLabel"]}>{t(field.label)}</span>
-          <input
-            className={styles["input"]}
-            type={field.secret ? "password" : "text"}
-            inputMode={field.name === "port" ? "numeric" : undefined}
-            value={draft.values[field.name] ?? ""}
-            placeholder={field.placeholder}
-            // Password managers ignore `off` but honour `new-password`. An empty field means
-            // "keep what is stored", so an autofilled password would replace working details.
-            autoComplete={field.secret ? "new-password" : "off"}
-            name={`notify-${draft.kind}-${field.name}`}
-            spellCheck={false}
-            disabled={busy}
-            onChange={(event) => {
-              onChange({
-                ...draft,
-                values: { ...draft.values, [field.name]: event.target.value },
-              });
-            }}
-          />
-        </label>
-      ))}
+      {/* A grid so a pair of short fields (host, port) can share a line. */}
+      <div className={styles["fields"]}>
+        {FIELDS[draft.kind].map((field) => (
+          <label
+            key={field.name}
+            className={cx(styles["field"], field.half === true && styles["half"])}
+          >
+            <span className={styles["fieldLabel"]}>{t(field.label)}</span>
+            <input
+              className={styles["input"]}
+              type={field.secret ? "password" : "text"}
+              inputMode={field.name === "port" ? "numeric" : undefined}
+              value={draft.values[field.name] ?? ""}
+              placeholder={field.placeholder}
+              // Password managers ignore `off` but honour `new-password`. An empty field means
+              // "keep what is stored", so an autofilled password would replace working details.
+              autoComplete={field.secret ? "new-password" : "off"}
+              name={`notify-${draft.kind}-${field.name}`}
+              spellCheck={false}
+              disabled={busy}
+              onChange={(event) => {
+                onChange({
+                  ...draft,
+                  values: { ...draft.values, [field.name]: event.target.value },
+                });
+              }}
+            />
+          </label>
+        ))}
+      </div>
 
       {incomplete && (
         <p className={styles["alert"]} role="alert">

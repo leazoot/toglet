@@ -5,9 +5,17 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { FocusEvent, JSX } from "react";
 
+import { setDockExpansion } from "../../ipc";
 import { cx } from "../../styles/classes";
 import { durationToken } from "../../styles/motion";
-import type { AccountView, AutoRunView, DockShape, QuotaView, SettingsView } from "../../types/ipc";
+import type {
+  AccountView,
+  AutoRunView,
+  DockShape,
+  QuotaView,
+  SettingsView,
+  ResetsView,
+} from "../../types/ipc";
 import type { Loadable } from "../../types/load";
 import type { AutoRunControl, AutoRunFailure } from "../autorun/store";
 import { AnchorNub, NUB_FILL_PATH } from "./AnchorNub";
@@ -86,6 +94,8 @@ export interface DockProps {
   autorunBusy: boolean;
   autorunFailure: AutoRunFailure | null;
   onAutoRunControl: (action: AutoRunControl) => void;
+  /** Reset alerts for the panel's banner; `null` while unknown. */
+  resets: ResetsView | null;
 }
 
 export function Dock({
@@ -117,6 +127,7 @@ export function Dock({
   autorunBusy,
   autorunFailure,
   onAutoRunControl,
+  resets,
 }: DockProps): JSX.Element {
   const box = useRef<HTMLDivElement | null>(null);
   const panel = useRef<HTMLDivElement | null>(null);
@@ -208,6 +219,13 @@ export function Dock({
         panel.current.getBoundingClientRect().top - nub.current.getBoundingClientRect().top;
       box.current?.style.setProperty(NUB_SCRIM_SHIFT_VARIABLE, `${String(shift)}px`);
     }
+    // The window is a full-height strip, so Rust needs the panel's rectangle, not just "open":
+    // otherwise the whole column swallows clicks meant for the apps behind it.
+    const rect = panel.current?.getBoundingClientRect();
+    void setDockExpansion(
+      true,
+      rect === undefined ? null : { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
+    );
   }, []);
 
   // Before first paint so the first frame is centred; again when the bar (and so the nub) moves.
@@ -216,6 +234,13 @@ export function Dock({
       measure();
     }
   }, [stage, measure, offset]);
+
+  // Closed: the bar is the only surface again, so the strip stops taking pointer events.
+  useEffect(() => {
+    if (stage === "closed") {
+      void setDockExpansion(false, null);
+    }
+  }, [stage]);
 
   // The panel's height changes while open (loading, notices, sheets), which moves its centre.
   useEffect(() => {
@@ -277,6 +302,7 @@ export function Dock({
               autorunBusy={autorunBusy}
               autorunFailure={autorunFailure}
               onAutoRunControl={onAutoRunControl}
+              resets={resets}
             />
           </div>
           <span ref={nub} className={styles["nub"]} {...hover}>

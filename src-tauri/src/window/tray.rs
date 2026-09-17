@@ -19,6 +19,9 @@ pub const TRAY_SHOW_EVENT: &str = "tray://show";
 pub const TRAY_REFRESH_EVENT: &str = "tray://refresh";
 pub const TRAY_SETTINGS_EVENT: &str = "tray://settings";
 
+/// The tray icon's own id, used to fetch it back when the summary changes.
+const TRAY_ID: &str = "toglet";
+
 const ITEM_SUMMARY: &str = "summary";
 const ITEM_SHOW: &str = "show";
 const ITEM_REFRESH: &str = "refresh";
@@ -126,10 +129,13 @@ pub fn install(app: &AppHandle) -> Option<TrayIcon> {
 
     app.manage(items);
 
-    TrayIconBuilder::with_id("toglet")
+    TrayIconBuilder::with_id(TRAY_ID)
         .icon(tray_image())
         // macOS only: lets the menu bar tint the icon to match its appearance.
         .icon_as_template(true)
+        // Hovering must say something before the interface has sent anything: without a tooltip
+        // Windows shows an empty bubble, which reads as a broken icon.
+        .tooltip(SUMMARY_PLACEHOLDER)
         .menu(&menu)
         // Left click shows the window (un-hiding it); the menu is on the right click.
         .show_menu_on_left_click(false)
@@ -173,10 +179,16 @@ fn entry(app: &AppHandle, id: &str, text: &str, enabled: bool) -> Option<MenuIte
         .ok()
 }
 
-/// Replaces the summary line; does nothing when there is no tray.
+/// Replaces the summary line and the hover tooltip; does nothing when there is no tray.
+///
+/// The menu entry is only visible once the menu is open, so the same sentence is also the
+/// tooltip - that is what hovering the icon shows, and the only thing most of the time.
 pub fn set_summary(app: &AppHandle, text: &str) {
     if let Some(items) = app.try_state::<Items>() {
         drop(items.summary.set_text(text));
+    }
+    if let Some(tray) = app.tray_by_id(TRAY_ID) {
+        drop(tray.set_tooltip(Some(text)));
     }
 }
 
@@ -336,6 +348,38 @@ mod tests {
                 "core:event:allow-unlisten",
                 "notification:default"
             ]
+        );
+    }
+
+    /// Hovering the icon is the only thing most users ever do with the tray, and it reads the
+    /// tooltip - not the menu entry, which needs the menu open. Setting one without the other
+    /// left Windows showing an empty bubble.
+    #[test]
+    fn the_summary_reaches_the_tooltip_and_not_only_the_menu_entry() {
+        let source = include_str!("tray.rs");
+        // Comments are stripped so prose naming a call does not count as one.
+        let implementation = source
+            .split("#[cfg(test)]")
+            .next()
+            .expect("split always yields a first part")
+            .lines()
+            .filter(|line| !line.trim_start().starts_with("//"))
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        assert!(
+            implementation.contains(".tooltip("),
+            "the icon needs a tooltip from the start, or hovering shows nothing"
+        );
+
+        let summary = implementation
+            .split("pub fn set_summary")
+            .nth(1)
+            .and_then(|rest| rest.split("\npub fn").next())
+            .expect("set_summary is a top-level function");
+        assert!(
+            summary.contains("set_text") && summary.contains("set_tooltip"),
+            "a new summary must update both the menu entry and the tooltip"
         );
     }
 }

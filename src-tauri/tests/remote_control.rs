@@ -53,7 +53,7 @@ fn command(
     at: i64,
 ) -> String {
     let signed = [
-        "toglet-remote/1",
+        "toglet-remote/2",
         "command",
         action,
         session,
@@ -61,11 +61,13 @@ fn command(
         &counter.to_string(),
         nonce,
         &at.to_string(),
+        // The argument-free actions sign an empty text segment; `send` has its own helper.
+        "",
     ]
     .join("\n");
     let mac = mac::sign_hex(SECRET, signed.as_bytes());
     format!(
-        r#"{{"v":1,"kind":"command","action":"{action}","sessionId":"{session}",
+        r#"{{"v":2,"kind":"command","action":"{action}","sessionId":"{session}",
            "observedState":"{observed}","counter":{counter},"nonce":"{nonce}",
            "issuedAt":{at},"mac":"{mac}"}}"#
     )
@@ -118,14 +120,21 @@ fn a_late_a_replayed_and_a_forged_command_change_nothing() {
     );
 
     // Signed with a secret the bridge does not have.
+    //
+    // The flip is unconditional on purpose. This was written as "replace every 'a' with 'b'",
+    // which is a no-op whenever the signature happens to contain no 'a' - about 1.6% of
+    // signatures - and then this test silently asserts nothing. BATCH-07 changed the signed
+    // bytes and rolled exactly such a signature, which is how it was found.
     let forged = {
         let real = command("cancel", SESSION, "needs_human", 3, &nonce(3), NOW);
-        let good = real.rsplit("\"mac\":\"").next().expect("a mac").to_owned();
-        let bad: String = good
-            .chars()
-            .map(|c| if c == 'a' { 'b' } else { c })
-            .collect();
-        real.replace(&good, &bad)
+        let marker = "\"mac\":\"";
+        let at = real.rfind(marker).expect("a mac") + marker.len();
+        let flipped = if real[at..].starts_with('0') {
+            '1'
+        } else {
+            '0'
+        };
+        format!("{}{flipped}{}", &real[..at], &real[at + 1..])
     };
     assert_eq!(
         task.receive(&mut guard, &forged, "needs_human", NOW),
@@ -214,6 +223,28 @@ fn the_interface_and_the_phone_send_the_same_events() {
             "the phone must send what {command_fn} sends"
         );
     }
+
+    // `send` is the one action whose text cannot ride on a `UserEvent`, so it is checked by the
+    // route it takes instead: the same command, the same validation, no second implementation.
+    let body = source
+        .split("fn send_autorun")
+        .nth(1)
+        .expect("send_autorun should exist");
+    let body = body.split("\n#[tauri::command]").next().unwrap_or(body);
+    assert!(
+        body.contains("autorun.send_text(") || body.contains("send(&autorun"),
+        "send_autorun should go through AutoRun"
+    );
+    assert!(
+        source.contains("fn send(autorun: &AutoRun, text: &str)")
+            && source.contains("validate_instruction(text)"),
+        "a phone sentence must pass the same validation a bound instruction does"
+    );
+    assert_eq!(
+        event_for(Action::Send),
+        None,
+        "send carries a text, so it deliberately maps to no UserEvent"
+    );
 }
 
 /// Unit tests prove each part correct but not that the application calls it; this checks that
@@ -238,6 +269,9 @@ fn the_poll_loop_is_started_and_reaches_the_state_machine() {
         "guard::event_for(",
         // And sends it through the one door.
         "autorun.user(event)",
+        // A command that ends the task leaves a state that no longer polls, so the outcome has
+        // to go out before the loop goes quiet - otherwise the phone waits forever.
+        "poll::owes_closing_receipt(",
     ] {
         assert!(
             loop_source.contains(call),

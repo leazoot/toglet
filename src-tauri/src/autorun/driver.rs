@@ -92,11 +92,16 @@ pub trait Ports: Send + 'static {
     /// Takes over the bound session on this account and starts the one continuation turn.
     /// `after_turn` is the exhausted turn the plan is continuing from; a thread whose last
     /// turn is another one has been used by somebody else meanwhile.
+    ///
+    /// `instruction` overrides the plan's stored one for this turn only - what the user typed on
+    /// their phone. `None` means the stored instruction, which is what automatic continuation
+    /// uses. The stored one is never rewritten.
     fn resume(
         &mut self,
         plan: &AutoRunPlan,
         account_id: &str,
         after_turn: Option<&str>,
+        instruction: Option<&str>,
     ) -> Result<Resumed>;
 
     /// Waits up to `wait` for the running turn to report something. `None` is "nothing yet".
@@ -138,6 +143,9 @@ pub type PlanEdit = Box<dyn FnOnce(&mut AutoRunPlan) + Send>;
 
 enum Command {
     User(UserEvent),
+    /// A sentence for the bound session, typed on the phone. Carried here rather than on
+    /// [`UserEvent`], which stays `Copy` and argument-free.
+    SendText(String),
     Observed(Observation),
     /// The change, and where to say it has been applied, written and announced.
     Edit(PlanEdit, SyncSender<()>),
@@ -176,6 +184,11 @@ impl DriverHandle {
 
     pub fn observe(&self, observation: Observation) -> Result<()> {
         self.send(Command::Observed(observation))
+    }
+
+    /// Continues the bound session with `text` instead of the stored instruction, once.
+    pub fn send_text(&self, text: String) -> Result<()> {
+        self.send(Command::SendText(text))
     }
 
     /// Changes the plan: applied in order, written to disk and reported to the observer; the
@@ -259,6 +272,12 @@ struct Driver {
     action: Action,
     hold: Option<Box<dyn PowerHold>>,
     executing: bool,
+    /// A phone sentence waiting to be used for the next continuation turn, if any.
+    ///
+    /// Held here rather than in the plan: it is session content and must not be persisted, and
+    /// it overrides the stored instruction for one turn only. Cleared when a turn actually
+    /// starts - not when one is attempted, or a takeover that retries would lose it.
+    pending_text: Option<String>,
 }
 
 impl Driver {
@@ -278,6 +297,7 @@ impl Driver {
             idle_slice: config.idle_slice,
             hold: None,
             executing: false,
+            pending_text: None,
         }
     }
 
@@ -334,20 +354,27 @@ impl Driver {
                 }
                 Action::Resume { account_id } => {
                     let after_turn = self.machine.dedup().last_observed_turn_id.clone();
-                    let fact =
-                        match self
-                            .ports
-                            .resume(&self.plan, &account_id, after_turn.as_deref())
-                        {
-                            Ok(Resumed::Started { turn_id }) => Fact::Resumed { turn_id },
-                            Ok(Resumed::TurnInProgress) => Fact::TurnInProgress,
-                            Ok(Resumed::WaitingOnHuman) => Fact::WaitingOnHuman,
-                            Ok(Resumed::ThreadChanged) => Fact::DesktopReopened,
-                            Err(error) => {
-                                self.log_failure("autorun_resume_failed", &error);
-                                Fact::ResumeFailed { code: error.code() }
-                            }
-                        };
+                    // Borrowed, not taken: a takeover that is busy retries, and the sentence has
+                    // to survive until a turn really starts.
+                    let instruction = self.pending_text.clone();
+                    let fact = match self.ports.resume(
+                        &self.plan,
+                        &account_id,
+                        after_turn.as_deref(),
+                        instruction.as_deref(),
+                    ) {
+                        Ok(Resumed::Started { turn_id }) => {
+                            self.pending_text = None;
+                            Fact::Resumed { turn_id }
+                        }
+                        Ok(Resumed::TurnInProgress) => Fact::TurnInProgress,
+                        Ok(Resumed::WaitingOnHuman) => Fact::WaitingOnHuman,
+                        Ok(Resumed::ThreadChanged) => Fact::DesktopReopened,
+                        Err(error) => {
+                            self.log_failure("autorun_resume_failed", &error);
+                            Fact::ResumeFailed { code: error.code() }
+                        }
+                    };
                     self.apply(fact)
                 }
             };
@@ -513,6 +540,25 @@ impl Driver {
                             UserEvent::Cancel => "cancel",
                         }));
                     self.machine.apply_user(event)
+                }
+                Command::SendText(text) => {
+                    // The text itself is session content: only its length is ever recorded.
+                    log(&LogRecord::new(Level::Info, "autorun_user_event")
+                        .with_phase(Phase::Storage)
+                        .with_detail(&format!("send {} chars", text.chars().count())));
+                    self.pending_text = Some(text);
+                    // Not the path a "continue" press takes: that one re-arms and waits for the
+                    // thread to produce a trigger, and a thread parked on a question never
+                    // will. A sentence goes straight to a continuation.
+                    let outcome = self.machine.apply_steer();
+                    // A sentence waits for whatever continuation is already on its way - that is
+                    // seconds off, and it is the same turn the user meant. A turn that is
+                    // already running is the one case where nothing can carry it: it cannot be
+                    // steered, and the continuation after it belongs to a different moment.
+                    if self.machine.state() == State::Running {
+                        self.pending_text = None;
+                    }
+                    outcome
                 }
                 Command::Observed(observation) => {
                     let generation = self.machine.generation();

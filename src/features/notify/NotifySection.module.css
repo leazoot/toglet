@@ -19,17 +19,17 @@
   color: var(--tg-quota-low);
 }
 
-/* Scrolls after three channels. */
+/* Scrolls after five closed rows; an opened row is taller and scrolls with the rest. */
 .list {
   list-style: none;
   margin: 0 0 6px;
   padding: 0;
-  max-height: calc(3 * var(--tg-notify-row-height));
+  max-height: calc(5 * var(--tg-notify-row-height));
   overflow-y: auto;
 }
 
 .row {
-  padding: 6px 0;
+  padding: 3px 0;
 }
 
 .row + .row {
@@ -44,7 +44,26 @@
   min-height: var(--tg-settings-row-height);
 }
 
+/* The row's own line: name, service and host, the delivery mark, the chevron. A button, so the
+   row opens from the keyboard too; the switch beside it stays its own control. */
+.summary {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
 .name {
+  flex: none;
+  max-width: 45%;
   min-width: 0;
   overflow: hidden;
   white-space: nowrap;
@@ -52,6 +71,46 @@
   font-size: var(--tg-text-setting-label-size);
   font-weight: var(--tg-text-account-weight);
   color: var(--tg-text-primary);
+}
+
+/* Service and host on the same line as the name; the first thing to truncate. */
+.kind {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: var(--tg-text-email-size);
+  font-weight: var(--tg-text-body-weight);
+  color: var(--tg-text-secondary);
+}
+
+/* The last delivery as a dot; the opened row says it in words. */
+.mark {
+  width: var(--tg-footer-dot-size);
+  height: var(--tg-footer-dot-size);
+  flex: none;
+  border-radius: 50%;
+}
+
+.markOk {
+  background: var(--tg-quota-healthy);
+}
+
+.markBad {
+  background: var(--tg-quota-low);
+}
+
+.markNone {
+  background: var(--tg-status-mute);
+}
+
+.chevronOpen {
+  transform: rotate(90deg);
+}
+
+.details {
+  padding: 2px 0 6px;
 }
 
 .meta {
@@ -167,9 +226,21 @@
   margin-top: 12px;
 }
 
+/* Two columns, so short fields (host and port) can share a line; everything else spans both. */
+.fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 8px;
+}
+
 .field {
   display: block;
   margin-top: 6px;
+  grid-column: 1 / -1;
+}
+
+.half {
+  grid-column: span 1;
 }
 
 .fieldLabel {
@@ -203,7 +274,7 @@
   color: var(--tg-text-tertiary);
 }
 
-/* The settings row that opens a sub-page; also used by the remote row. */
+/* The settings row that opens a sub-page; also used by the remote and reset rows. */
 .entry {
   display: flex;
   align-items: center;
@@ -232,4 +303,5 @@
   width: 12px;
   height: 12px;
   flex: none;
+  transition: transform var(--tg-duration-icon) var(--tg-ease-out);
 }

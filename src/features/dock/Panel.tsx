@@ -7,12 +7,13 @@ import type { ForwardedRef, JSX, KeyboardEvent, RefObject } from "react";
 import { t } from "../../i18n";
 import type { MessageKey } from "../../i18n";
 import { cx } from "../../styles/classes";
-import type { AccountView, AutoRunView, QuotaView } from "../../types/ipc";
+import type { AccountView, AutoRunView, QuotaView, ResetsView } from "../../types/ipc";
 import type { Loadable } from "../../types/load";
 import { AccountRow } from "../accounts/AccountRow";
 import { isExecuting } from "../autorun/status";
 import type { AutoRunControl, AutoRunFailure } from "../autorun/store";
 import { quotaOf } from "../quotas/store";
+import { ResetBanner } from "../resets/ResetBanner";
 import { AutoRunMark } from "../settings/AutoRunSheet";
 import { AddIcon } from "./AddIcon";
 import { AutoRunLine } from "./AutoRunLine";
@@ -56,6 +57,8 @@ export interface PanelProps {
   autorunBusy: boolean;
   autorunFailure: AutoRunFailure | null;
   onAutoRunControl: (action: AutoRunControl) => void;
+  /** Reset alerts mirrored from Rust, or `null` while unknown. Drawn only when switched on. */
+  resets: ResetsView | null;
 }
 
 /** The ref goes on the outer element so the dock can measure the rendered height. */
@@ -78,6 +81,7 @@ export const Panel = forwardRef<HTMLDivElement, PanelProps>(function Panel(
     autorunBusy,
     autorunFailure,
     onAutoRunControl,
+    resets,
   },
   ref,
 ): JSX.Element {
@@ -189,6 +193,8 @@ export const Panel = forwardRef<HTMLDivElement, PanelProps>(function Panel(
           </ul>
         )}
 
+        {/* Above the status bar, as asked (BATCH-08); only while the switch is on. */}
+        {resets?.enabled === true && <ResetBanner view={resets} nowSeconds={nowSeconds} />}
         <div className={styles["footer"]}>
           <span className={cx(styles["dot"], styles[status.tone])} aria-hidden="true" />
           <span className={styles["status"]}>{t(status.key, status.params)}</span>

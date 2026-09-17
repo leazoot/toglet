@@ -1,0 +1,24 @@
+{
+  "data": {
+    "latest_reset": {
+      "id": "2098685367058612394",
+      "reset_type": "regular",
+      "announced_at": "2026-09-12T08:09:17.000Z",
+      "text": "Reset all propagated. Sweet dreams. https://t.co/VgKVUixoJG",
+      "source": {
+        "type": "x_post",
+        "author": "thsottiaux",
+        "url": "https://x.com/thsottiaux/status/2098685367058612394"
+      }
+    },
+    "scheduled_reset": null,
+    "active_watch": null,
+    "stats": {
+      "total": 53,
+      "last_reset_at": "2026-09-12T08:09:17.000Z",
+      "days_since_last": 4.9,
+      "avg_interval_days": 6.9
+    }
+  },
+  "meta": { "api_version": "v1", "generated_at": "2026-09-17T06:25:54.627Z" }
+}

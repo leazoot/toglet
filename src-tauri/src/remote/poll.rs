@@ -1,4 +1,5 @@
-//! One of the only two files that open outbound connections (with `notify::send`).
+//! One of the only three files that open outbound connections (with `notify::send` and
+//! `resets::fetch`).
 //!
 //! A single POST carries the status receipt out and brings at most one command back. Payloads
 //! and verification live in `envelope`; this file only moves bytes.
@@ -18,11 +19,14 @@ const PHASE: Phase = Phase::Remote;
 /// Long enough for a bridge to hold the request open as a long poll; immediate answers also work.
 const TIMEOUT: Duration = Duration::from_secs(30);
 
-/// Poll interval while the user is likely about to act (the states the phone is notified about).
-const ATTENTIVE: Duration = Duration::from_secs(20);
-
-/// Poll interval while the task runs, kept only so a remote pause still works.
-const BACKGROUND: Duration = Duration::from_secs(300);
+/// Poll interval whenever a task is bound.
+///
+/// A running task used to get 300s of its own, described as "kept only so a remote pause still
+/// works" - which is the one thing 300s did not do: a pause or a cancel sat in the queue for up
+/// to five minutes while the person watched a spinner. The bridge holds a poll open (see
+/// [`TIMEOUT`]), so a short interval parks one request rather than repeating many, which is what
+/// that design is for.
+const BOUND: Duration = Duration::from_secs(20);
 
 /// A bridge answer; any unfamiliar body means "no command", never a guess.
 #[derive(Debug, Deserialize)]
@@ -38,17 +42,35 @@ pub fn interval(enabled: bool, state: State, backoff: Backoff) -> Option<Duratio
         return None;
     }
     // Nothing is bound, so every command would have to be refused.
-    if matches!(state, State::Disabled | State::Stopped) {
+    if !takes_commands(state) {
         return None;
     }
     if backoff.failures() > 0 {
         return Some(backoff.delay());
     }
-    let attentive = matches!(
-        state,
-        State::NeedsHuman | State::Paused | State::WaitingQuota | State::RoundCompleted
-    );
-    Some(if attentive { ATTENTIVE } else { BACKGROUND })
+    Some(BOUND)
+}
+
+/// Whether this state can act on a command at all. One definition: [`owes_closing_receipt`] asks
+/// the same question, and two copies of it would drift apart.
+fn takes_commands(state: State) -> bool {
+    !matches!(state, State::Disabled | State::Stopped)
+}
+
+/// Whether one last receipt is owed: an outcome is still unsent, and this state no longer polls.
+///
+/// Cancelling lands the task in `Disabled` - precisely the state [`interval`] stops polling in -
+/// so the receipt carrying that command's outcome would never be sent, and the phone would wait
+/// for a result that cannot arrive. Silencing the *command* half is what "nothing is bound"
+/// means; the receipt half is what the phone is still waiting for.
+///
+/// `outcome_unsent` is carried by the caller rather than derived from the state, because a user
+/// event is delivered to the driver without waiting for it to be applied (`Driver::user` sends
+/// and returns; only `Driver::edit` does the handshake that makes a following read see the
+/// change). Reading the state back immediately after handling a command can therefore still show
+/// the state the command just ended, which would judge the receipt unnecessary and lose it.
+pub fn owes_closing_receipt(enabled: bool, state: State, outcome_unsent: bool) -> bool {
+    enabled && outcome_unsent && !takes_commands(state)
 }
 
 /// Posts one receipt and returns the bridge's pending command, if any, unverified.
@@ -170,12 +192,14 @@ mod tests {
             State::WaitingQuota,
             State::RoundCompleted,
         ] {
-            assert_eq!(interval(true, state, Backoff::new()), Some(ATTENTIVE));
+            assert_eq!(interval(true, state, Backoff::new()), Some(BOUND));
         }
     }
 
+    /// A running task is the one a person reaches for cancel on, so it may not be the slow case:
+    /// the old 300s interval left a cancel queued for up to five minutes.
     #[test]
-    fn a_running_task_is_asked_about_rarely() {
+    fn a_running_task_is_asked_about_just_as_often_so_a_cancel_lands() {
         for state in [
             State::Running,
             State::Resuming,
@@ -185,8 +209,55 @@ mod tests {
             State::Armed,
             State::WaitingNetwork,
         ] {
-            assert_eq!(interval(true, state, Backoff::new()), Some(BACKGROUND));
+            assert_eq!(interval(true, state, Backoff::new()), Some(BOUND));
         }
+        assert!(BOUND <= Duration::from_secs(20), "a cancel must not queue");
+    }
+
+    /// The bug this pair exists for: cancelling lands in `Disabled`, where polling stops, so the
+    /// receipt reporting the cancel would never leave. Without this, the phone spins forever.
+    #[test]
+    fn the_states_that_stop_polling_still_owe_the_phone_one_last_receipt() {
+        for state in [State::Disabled, State::Stopped] {
+            assert_eq!(interval(true, state, Backoff::new()), None);
+            assert!(owes_closing_receipt(true, state, true));
+        }
+    }
+
+    #[test]
+    fn a_state_that_keeps_polling_owes_no_closing_receipt() {
+        for state in [State::Running, State::NeedsHuman, State::Paused] {
+            assert!(!owes_closing_receipt(true, state, true));
+        }
+    }
+
+    /// The master switch is off: the path does not exist, and that includes the last receipt.
+    #[test]
+    fn nothing_is_owed_once_the_feature_is_switched_off() {
+        for state in [State::Disabled, State::Stopped, State::Running] {
+            assert!(!owes_closing_receipt(false, state, true));
+        }
+    }
+
+    /// Nothing was handled, so there is no outcome to report and no receipt to owe. Without the
+    /// flag, every dormant round would post one.
+    #[test]
+    fn a_state_that_stopped_on_its_own_owes_nothing() {
+        for state in [State::Disabled, State::Stopped] {
+            assert!(!owes_closing_receipt(true, state, false));
+        }
+    }
+
+    /// The race this signature exists for. A user event is handed to the driver without waiting
+    /// for it to be applied, so the round that handled the command may still read the state the
+    /// command ended. Deciding then would drop the receipt; the flag carries it to the round
+    /// where the state has settled.
+    #[test]
+    fn an_outcome_survives_a_state_that_has_not_settled_yet() {
+        // The round that handled it: the cancel is in flight, the state still reads `Running`.
+        assert!(!owes_closing_receipt(true, State::Running, true));
+        // The next round, once the driver has applied it. The outcome is still owed, not lost.
+        assert!(owes_closing_receipt(true, State::Disabled, true));
     }
 
     #[test]
@@ -257,7 +328,7 @@ mod tests {
 
     /// The set of files that may open outbound connections is a security boundary.
     #[test]
-    fn only_two_files_in_the_whole_crate_build_an_http_client() {
+    fn only_three_files_in_the_whole_crate_build_an_http_client() {
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
         let mut builders = Vec::new();
         walk(&root, &mut |path, source| {
@@ -273,7 +344,10 @@ mod tests {
             }
         });
         builders.sort();
-        assert_eq!(builders, vec!["notify/send.rs", "remote/poll.rs"]);
+        assert_eq!(
+            builders,
+            vec!["notify/send.rs", "remote/poll.rs", "resets/fetch.rs"]
+        );
     }
 
     fn walk(dir: &std::path::Path, visit: &mut impl FnMut(&std::path::Path, &str)) {

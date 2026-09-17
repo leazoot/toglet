@@ -433,29 +433,150 @@
         background: var(--hairline);
         margin-bottom: 14px;
       }
-      .at-machine {
-        display: flex;
-        gap: 11px;
-        align-items: flex-start;
+      .ask {
+        margin-top: 10px;
       }
-      .at-machine svg {
-        flex: none;
-        margin-top: 1px;
-      }
-      .at-machine p {
+      .ask p {
         margin: 0;
       }
-      .at-machine .lead {
+      .ask .lead {
         font-size: 14.5px;
         font-weight: 500;
         line-height: 1.45;
         color: var(--t1);
       }
-      .at-machine .tail {
+      .ask .tail {
         margin-top: 5px;
         font-size: 12.5px;
         line-height: 1.6;
         color: var(--t3);
+      }
+      /* The one piece of session content allowed out here, and it arrives sealed. */
+      .excerpt {
+        margin-top: 2px;
+      }
+      .excerpt .excerpt-body {
+        margin: 0;
+        font-size: 14px;
+        font-weight: 450;
+        line-height: 1.55;
+        color: var(--t1);
+        display: -webkit-box;
+        -webkit-line-clamp: 4;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+      }
+      .excerpt .excerpt-empty {
+        margin: 0;
+        font-size: 14px;
+        font-weight: 450;
+        color: var(--t2);
+      }
+      .excerpt .excerpt-why {
+        margin: 4px 0 0;
+        font-size: 12px;
+        line-height: 1.55;
+        color: var(--t3);
+      }
+      .chips {
+        display: flex;
+        gap: 8px;
+        margin-top: 12px;
+        overflow-x: auto;
+        scrollbar-width: none;
+      }
+      .chips::-webkit-scrollbar {
+        display: none;
+      }
+      .chip {
+        flex: none;
+        height: 34px;
+        padding: 0 14px;
+        border-radius: 14px;
+        background: var(--soft);
+        box-shadow: inset 0 0 0 1px var(--hairline);
+        color: var(--t1);
+        font-size: 13.5px;
+        font-weight: 500;
+        white-space: nowrap;
+        transition: transform 0.12s ease-out;
+      }
+      .chip:active {
+        transform: scale(0.97);
+        background: var(--press);
+      }
+      .composer {
+        position: relative;
+        margin-top: 10px;
+        min-height: 52px;
+        border-radius: 15px;
+        background: var(--soft);
+        box-shadow: inset 0 0 0 1px var(--hairline);
+        padding: 14px 16px;
+        display: flex;
+        align-items: center;
+        transition: box-shadow 0.18s ease-out;
+      }
+      .composer:focus-within {
+        box-shadow: inset 0 0 0 1px rgba(var(--mint-rgb), 0.45);
+      }
+      .composer-input {
+        width: 100%;
+        max-height: 96px;
+        border: 0;
+        padding: 0;
+        margin: 0;
+        background: transparent;
+        color: var(--t1);
+        font-family: inherit;
+        /* At least 16px: iOS zooms into smaller focused fields and does not zoom back out. */
+        font-size: 16px;
+        font-weight: 450;
+        line-height: 1.45;
+        resize: none;
+        outline: none;
+        overflow-y: auto;
+      }
+      .composer-input::placeholder {
+        color: var(--t3);
+      }
+      .counter {
+        position: absolute;
+        right: 14px;
+        bottom: 6px;
+        font-family: ui-monospace, "SF Mono", Menlo, monospace;
+        font-size: 11.5px;
+        font-variant-numeric: tabular-nums;
+        color: var(--t3);
+      }
+      .counter.full {
+        color: var(--coral);
+      }
+      /* A standalone secondary, rather than one sharing a row. */
+      .secondary.wide {
+        flex: none;
+        width: 100%;
+      }
+      .field.tall {
+        height: auto;
+        align-items: flex-start;
+        padding: 12px 16px;
+      }
+      .field.tall svg {
+        margin-top: 3px;
+      }
+      .field-body textarea.lines {
+        width: 100%;
+        border: 0;
+        padding: 0;
+        background: transparent;
+        color: var(--t1);
+        font-family: inherit;
+        font-size: 16px;
+        font-weight: 450;
+        line-height: 1.5;
+        resize: none;
+        outline: none;
       }
       .surface {
         border-radius: 15px;

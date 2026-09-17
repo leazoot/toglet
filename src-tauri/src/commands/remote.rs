@@ -25,12 +25,21 @@ const PHASE: Phase = Phase::Remote;
 #[serde(rename_all = "camelCase")]
 pub struct RemoteView {
     pub enabled: bool,
+    /// Whether the agent's last message may ride along, sealed, in a receipt. Off by default:
+    /// an upgrade must not start sending session content without being asked.
+    pub share_excerpt: bool,
     /// Whether an address and a secret are stored.
     pub paired: bool,
     /// Host only, for display.
     pub bridge_host: String,
     /// Full address for editing; `None` when nothing is stored. The secret has no counterpart.
     pub bridge_endpoint: Option<String>,
+    /// The key a bridge checks a `GET /status` read against; `None` when unpaired.
+    ///
+    /// **Not the shared secret.** It is a one-way derivation whose whole purpose is to be pasted
+    /// onto a machine this design treats as untrusted, so showing it is the point rather than a
+    /// leak. The secret itself still has no counterpart here, and no way out of Rust.
+    pub status_key: Option<String>,
     pub last_command: Option<LastCommandView>,
 }
 
@@ -49,6 +58,8 @@ pub struct LastCommandView {
 #[serde(rename_all = "camelCase")]
 pub struct RemoteDraft {
     pub enabled: bool,
+    /// `None` keeps the stored preference, so the page can save one half at a time.
+    pub share_excerpt: Option<bool>,
     /// `None` keeps the stored address.
     pub endpoint: Option<String>,
     /// `None` keeps the stored secret; the page never pre-fills it.
@@ -92,13 +103,19 @@ impl Remote {
         self.store.save(&config)
     }
 
-    fn view(&self, endpoint: Option<String>) -> RemoteView {
+    fn view(&self, bridge: Option<(String, String)>) -> RemoteView {
         let config = self.config();
+        let (endpoint, status_key) = match bridge {
+            Some((endpoint, key)) => (Some(endpoint), Some(key)),
+            None => (None, None),
+        };
         RemoteView {
             enabled: config.enabled,
+            share_excerpt: config.share_excerpt,
             paired: endpoint.is_some(),
             bridge_host: config.bridge_host.clone(),
             bridge_endpoint: endpoint,
+            status_key,
             last_command: config.last_command.as_ref().map(view_of),
         }
     }
@@ -112,16 +129,22 @@ fn view_of(record: &LastCommandRecord) -> LastCommandView {
     }
 }
 
-/// The stored address, or `None` when unpaired. The secret is dropped immediately.
-fn stored_endpoint(state: &AppState) -> Option<String> {
+/// The stored address and the bridge's read key, or `None` when unpaired.
+///
+/// One read, with the secret dropped the moment the key is derived from it. Keeping this to a
+/// single `load_bridge` is also what lets the guard test below count the reads.
+fn stored_bridge(state: &AppState) -> Option<(String, String)> {
     crate::remote::store::load_bridge(state.secrets())
         .ok()
-        .map(|bridge| bridge.endpoint)
+        .map(|bridge| {
+            let status_key = crate::remote::crypt::status_key_hex(bridge.secret.as_bytes());
+            (bridge.endpoint, status_key)
+        })
 }
 
 #[tauri::command]
 pub fn read_remote(state: State<'_, AppState>, remote: State<'_, Remote>) -> RemoteView {
-    remote.view(stored_endpoint(&state))
+    remote.view(stored_bridge(&state))
 }
 
 /// Saves the settings and any newly typed bridge details. Turning the feature off deletes the
@@ -142,6 +165,9 @@ fn save(state: &AppState, remote: &Remote, draft: RemoteDraft) -> Result<RemoteV
         forget_bridge(secrets)?;
         let mut config = remote.config();
         config.disable();
+        if let Some(share) = draft.share_excerpt {
+            config.share_excerpt = share;
+        }
         remote.store.save(&config)?;
         drop(config);
         return Ok(remote.view(None));
@@ -168,15 +194,20 @@ fn save(state: &AppState, remote: &Remote, draft: RemoteDraft) -> Result<RemoteV
     };
     bridge.validate()?;
     let host = bridge.host();
+    // Derived before the secret is moved away; it is what the page may show.
+    let status_key = crate::remote::crypt::status_key_hex(bridge.secret.as_bytes());
     store_bridge(secrets, &bridge)?;
     let endpoint = bridge.endpoint;
 
     let mut config = remote.config();
     config.enabled = true;
     config.bridge_host = host;
+    if let Some(share) = draft.share_excerpt {
+        config.share_excerpt = share;
+    }
     remote.store.save(&config)?;
     drop(config);
-    Ok(remote.view(Some(endpoint)))
+    Ok(remote.view(Some((endpoint, status_key))))
 }
 
 /// Forgets the pairing entirely: the stored details, the host, and the replay state.
@@ -241,6 +272,16 @@ mod tests {
         assert!(
             views.contains("pub bridge_endpoint"),
             "the address is meant to come back, so the page can offer it for editing"
+        );
+        assert!(
+            views.contains("pub status_key"),
+            "the derived read key is meant to come back: the page hands it to the bridge"
+        );
+        // One derivation, shared with the reference bridge and the phone. A second one written
+        // here is exactly how the three would drift apart unnoticed.
+        assert!(
+            implementation.contains("crypt::status_key_hex"),
+            "the read key must come from remote::crypt, not be recomputed here"
         );
     }
 }

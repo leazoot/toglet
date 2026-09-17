@@ -250,17 +250,19 @@ describe("the docked application", () => {
     expect(screen.queryByTestId("panel")).toBeNull();
   });
 
-  it("tells Rust the panel is open, and nothing about its size", async () => {
-    // The window never resizes; Rust only needs the pointer-gate state.
+  it("tells Rust where the open panel is, so the strip takes only the panel's clicks", async () => {
+    // The window still never resizes: the rectangle aims the pointer gate. Without it an open
+    // panel claims the whole full-height strip and swallows clicks meant for other apps.
     render(<App />);
     await screen.findByText("68%");
     await open();
 
-    expect(invoke).toHaveBeenCalledWith("set_dock_expansion", { expanded: true });
-    const sizes = invoke.mock.calls.filter(
-      (call) => call[0] === "set_dock_expansion" && "contentHeight" in (call[1] ?? {}),
-    );
-    expect(sizes).toHaveLength(0);
+    // jsdom lays nothing out, so the measured rectangle is all zeros. Asserting it exactly is
+    // stronger than "some numbers": it pins the field names Rust deserialises by.
+    expect(invoke).toHaveBeenCalledWith("set_dock_expansion", {
+      expanded: true,
+      panel: { x: 0, y: 0, width: 0, height: 0 },
+    });
   });
 
   it("tells Rust when the panel has closed, so the strip lets clicks through again", async () => {
@@ -271,7 +273,8 @@ describe("the docked application", () => {
 
     await close();
 
-    expect(invoke).toHaveBeenCalledWith("set_dock_expansion", { expanded: false });
+    // Closed, the rectangle is withdrawn as well: a stale one would keep that area dead.
+    expect(invoke).toHaveBeenCalledWith("set_dock_expansion", { expanded: false, panel: null });
   });
 
   it("lets the panel enter in the frame it renders", async () => {

@@ -9,6 +9,8 @@ pub mod notify;
 pub mod onboarding;
 pub mod remote;
 pub mod remote_poll;
+pub mod resets;
+pub mod resets_poll;
 pub mod settings;
 pub mod state;
 pub mod switching;

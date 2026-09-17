@@ -124,12 +124,58 @@ fn unreadable_window() -> TogletError {
         .with_detail("the window did not answer about its position")
 }
 
-/// Tells the pointer gate whether the panel is open: open, the whole window takes pointer events;
-/// closed, only the bar does. Not done by resizing, because a window growing leftward flashes its
-/// old frame at the new origin.
+/// Tells the pointer gate whether the panel is open, and where it is.
+///
+/// Open, the panel's own rectangle takes pointer events; closed, only the bar does. Not done by
+/// resizing, because a window growing leftward flashes its old frame at the new origin - and the
+/// window is a full-height strip, so "open" must not mean "the whole column".
 #[tauri::command]
-pub fn set_dock_expansion(gate: State<'_, PointerGate>, expanded: bool) {
-    gate.update(|reach| reach.expanded = expanded);
+pub fn set_dock_expansion(
+    window: WebviewWindow,
+    gate: State<'_, PointerGate>,
+    expanded: bool,
+    panel: Option<PanelRect>,
+) {
+    // A rectangle that cannot be converted is dropped rather than guessed: the gate then falls
+    // back to the whole window, which is reachable if wasteful.
+    let measured = panel.and_then(|rect| to_screen(&window, rect));
+    gate.update(|reach| {
+        reach.expanded = expanded;
+        reach.panel = if expanded { measured } else { None };
+    });
+}
+
+/// The open panel, in CSS pixels relative to the window's client area.
+#[derive(Debug, Clone, Copy, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PanelRect {
+    pub x: f64,
+    pub y: f64,
+    pub width: f64,
+    pub height: f64,
+}
+
+fn to_screen(window: &WebviewWindow, rect: PanelRect) -> Option<window::Placement> {
+    // NaN fails every comparison, so the size checks below cannot stand in for this one.
+    let finite = rect.x.is_finite()
+        && rect.y.is_finite()
+        && rect.width.is_finite()
+        && rect.height.is_finite();
+    if !finite || rect.width <= 0.0 || rect.height <= 0.0 {
+        return None;
+    }
+    let scale = window.scale_factor().ok()?;
+    let placement = window::current_placement(window).ok()?;
+    Some(window::surface_rect(
+        placement,
+        window::LogicalRect {
+            x: rect.x,
+            y: rect.y,
+            width: rect.width,
+            height: rect.height,
+        },
+        scale,
+    ))
 }
 
 /// Sets the tray summary line. The interface formats it so it matches the panel; the length is

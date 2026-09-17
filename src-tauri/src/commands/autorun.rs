@@ -146,6 +146,11 @@ pub struct AutoRun {
     handle: Mutex<Option<DriverHandle>>,
     latest: Arc<Mutex<AutoRunPlan>>,
     listed: Mutex<HashMap<String, ListedThread>>,
+    /// The agent's last message in the bound session, kept in memory only.
+    ///
+    /// Not in the plan (written to disk) and not in `AutoRunView` (crosses to the desktop
+    /// interface): `remote` is the one caller allowed to send it out, and only sealed.
+    excerpt: Arc<Mutex<Option<String>>>,
 }
 
 impl AutoRun {
@@ -173,12 +178,14 @@ impl AutoRun {
                 log(&LogRecord::new(Level::Warn, "autorun_state_not_delivered").with_phase(PHASE));
             }
         };
+        let excerpt = Arc::new(Mutex::new(None));
         let ports = AppPorts::new(
             Box::new(DriverServices { state, app }),
             Box::new(SystemClientProbe::new()),
             Box::new(SystemClientRestart::new()),
             Box::new(NoFaults),
             Box::new(SystemClock),
+            Arc::clone(&excerpt),
         );
         let handle = match spawn(DriverConfig {
             store,
@@ -201,7 +208,17 @@ impl AutoRun {
             handle: Mutex::new(handle),
             latest,
             listed: Mutex::new(HashMap::new()),
+            excerpt,
         }
+    }
+
+    /// The agent's last message, for `remote` to seal into a receipt. `None` when the session
+    /// has not been read yet or the agent has said nothing.
+    pub(crate) fn agent_excerpt(&self) -> Option<String> {
+        self.excerpt
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone()
     }
 
     pub fn latest(&self) -> AutoRunPlan {
@@ -235,6 +252,15 @@ impl AutoRun {
             .as_ref()
             .ok_or_else(driver_unavailable)?
             .user(event)
+    }
+
+    /// Continues the bound session with a sentence of the user's own, once. Same single path:
+    /// the driver turns it into the continuation a "continue" press would have started.
+    pub(crate) fn send_text(&self, text: String) -> Result<()> {
+        self.handle()
+            .as_ref()
+            .ok_or_else(driver_unavailable)?
+            .send_text(text)
     }
 }
 
@@ -522,6 +548,21 @@ pub fn resume_autorun(autorun: State<'_, AutoRun>) -> std::result::Result<(), Er
 #[tauri::command]
 pub fn cancel_autorun(autorun: State<'_, AutoRun>) -> std::result::Result<(), ErrorView> {
     reported("autorun_cancel_failed", autorun.user(UserEvent::Cancel))
+}
+
+/// Continues the bound session with the user's own sentence, once. The same validation the
+/// binding uses, so the phone and the panel cannot disagree about what is acceptable.
+#[tauri::command]
+pub fn send_autorun(
+    autorun: State<'_, AutoRun>,
+    text: String,
+) -> std::result::Result<(), ErrorView> {
+    reported("autorun_send_failed", send(&autorun, &text))
+}
+
+fn send(autorun: &AutoRun, text: &str) -> Result<()> {
+    let instruction = validate_instruction(text)?;
+    autorun.send_text(instruction)
 }
 
 /// The text is user data and never reaches a log or an error.

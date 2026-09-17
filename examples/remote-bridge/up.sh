@@ -1,9 +1,18 @@
 #!/usr/bin/env bash
-# Asks the two questions, writes .env, and starts the stack. NOT PART OF TOGLET - see ../README.md.
+# Asks the three questions, writes .env, and starts the stack. NOT PART OF TOGLET - see ../README.md.
 #
-#   ./up.sh                          asks for both
-#   ./up.sh bridge.example.com       asks only for the prefix
-#   ./up.sh bridge.example.com a1b2  asks nothing
+#   ./up.sh                               asks for whatever is not already in .env
+#   ./up.sh bridge.example.com            asks for the prefix and the status key
+#   ./up.sh bridge.example.com a1b2       asks only for the status key
+#   ./up.sh bridge.example.com a1b2 <key> asks nothing
+#
+# The status key also comes from the environment, which is how it is supplied when this runs
+# with no terminal to ask at (piped from curl, or any unattended re-run):
+#
+#   STATUS_KEY=<64 hex> ./up.sh                      keeps the domain and prefix already in .env
+#   STATUS_KEY=<64 hex> ./up.sh bridge.example.com a1b2
+#
+# An argument wins over the environment, which wins over what .env already holds.
 #
 # The values go into `.env` because every later `docker compose` command reads them from there.
 # Installs nothing and touches no file outside this directory.
@@ -30,14 +39,19 @@ command -v docker >/dev/null || die "Docker is not installed."
 docker compose version >/dev/null 2>&1 || die "This needs Docker Compose v2 (docker compose ...)."
 
 # Keep whatever is already set up: a re-run should not quietly change the deployment.
-OLD_DOMAIN=""; OLD_PREFIX=""
+OLD_DOMAIN=""; OLD_PREFIX=""; OLD_KEY=""
 if [[ -f .env ]]; then
   OLD_DOMAIN="$(sed -n 's/^DOMAIN=//p' .env | head -n1)"
   OLD_PREFIX="$(sed -n 's/^PREFIX=//p' .env | head -n1)"
+  OLD_KEY="$(sed -n 's/^STATUS_KEY=//p' .env | head -n1)"
 fi
 
 DOMAIN="${1:-}"
 PREFIX="${2:-}"
+# Argument, else the environment, else asked for below. Deliberately only the status key: on a
+# re-run .env already carries the domain and the prefix, and an exported DOMAIN quietly
+# repointing an existing deployment would be a worse surprise than the one this solves.
+STATUS_KEY="${3:-${STATUS_KEY:-}}"
 
 ask() { # prompt, current value -> answer on stdout
   local reply
@@ -68,8 +82,57 @@ fi
 # A slash or space in the prefix would silently break the Caddyfile.
 [[ "$PREFIX" =~ ^[A-Za-z0-9_-]+$ ]] || die "The prefix may only hold letters, digits, - and _: $PREFIX"
 
+# The status key authenticates a `/status` read, because the last receipt can carry a sealed
+# excerpt of your session and handing that to whoever asks is a leak.
+#
+# It is NOT the shared secret, and this script deliberately will not compute it for you: doing so
+# would require the secret on this machine, which is the one thing the design keeps off it. It is
+# a one-way derivation, so what lands here cannot sign a command or open an excerpt.
+if [[ -z "$STATUS_KEY" ]]; then
+  if [[ -n "$OLD_KEY" ]]; then
+    STATUS_KEY="$(ask "Status key [$OLD_KEY, keep it]: " "$OLD_KEY")"
+  elif [[ ! -t 0 ]]; then
+    # Piped in, so there is nobody to ask, and nothing stored to fall back on. Say exactly what
+    # to do rather than failing the hex check below with an empty value.
+    die "No status key, and no terminal to ask at.
+
+  Toglet shows it: settings -> phone remote, next to the paired bridge, with a copy button.
+
+  Or derive it ON YOUR OWN COMPUTER from your shared secret:
+
+      printf '%s' 'toglet-remote/2 status<YOUR SECRET>' | shasum -a 256 | cut -d' ' -f1
+
+  Then pass it in either way:
+
+      STATUS_KEY=<64 hex> bash toglet-bridge-install.sh $DOMAIN $PREFIX
+      bash toglet-bridge-install.sh $DOMAIN $PREFIX <64 hex>"
+  else
+    cat <<'HOWTO'
+
+  One more value: the status key.
+
+  Easiest: Toglet shows it. Settings -> phone remote, next to the paired bridge, with a copy
+  button. Copy it from there and paste it here.
+
+  Or derive it yourself ON YOUR OWN COMPUTER, with your shared secret. Either way, do not type
+  the secret itself on this machine.
+
+      printf '%s' 'toglet-remote/2 status<YOUR SECRET>' | shasum -a 256 | cut -d' ' -f1
+
+  (Linux without shasum: `sha256sum` instead. Note there is no space before <YOUR SECRET>.)
+
+HOWTO
+    STATUS_KEY="$(ask "Status key: " "")"
+  fi
+fi
+# Says the length, never the value: this is a key, and a refusal often means one mistyped
+# character in an otherwise real one. Piped installs have their output captured.
+[[ "$STATUS_KEY" =~ ^[0-9a-fA-F]{64}$ ]] \
+  || die "The status key must be 64 hex characters (got ${#STATUS_KEY}). Not echoing it - it is a key."
+STATUS_KEY="$(printf '%s' "$STATUS_KEY" | tr '[:upper:]' '[:lower:]')"
+
 cat > .env <<ENV
-# Written by up.sh. Both are read by compose.yaml; edit them here or re-run up.sh.
+# Written by up.sh. All three are read by compose.yaml; edit them here or re-run up.sh.
 
 # An A record for this must point at this machine.
 DOMAIN=$DOMAIN
@@ -81,6 +144,12 @@ DOMAIN=$DOMAIN
 #
 # Changing it unpairs every phone.
 PREFIX=$PREFIX
+
+# Authenticates a \`/status\` read. NOT the shared secret - it is
+# SHA-256("toglet-remote/2 status" + secret), derived on your own machine. One-way: somebody who
+# takes this file still cannot sign a command or open a sealed excerpt. They could read your
+# status, so treat it as a password, but the zero-trust property survives.
+STATUS_KEY=$STATUS_KEY
 ENV
 
 # Something already on 80 or 443 means an existing reverse proxy. A second one cannot bind the
@@ -153,8 +222,12 @@ cat <<DONE
 
       openssl rand -base64 24
 
-  The bridge relays bytes it can neither read nor sign. Generating the secret on this machine
-  would put it somewhere the design treats as untrusted.
+  The bridge cannot sign a command: that MAC uses the shared secret, which never reaches this
+  machine. Generating the secret here would put it somewhere the design treats as untrusted.
+
+  What this machine does hold is the status key you pasted - a one-way derivation of the secret.
+  It lets the bridge tell your phone apart from a stranger when something reads /status. It
+  cannot be turned back into the secret, cannot sign a command, and cannot open a sealed excerpt.
 
   docker compose logs -f      what it is doing
   docker compose ps           what is running
